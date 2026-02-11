@@ -1,0 +1,28 @@
+## Financial Data Pipeline
+This is a data pipeline project ingesting financial data (specifically equity data) from Polygon.io and FRED via APIs and produces decision-ready analytics metrics. The pipeline is batch-oriented, normalizes and validates vendor data, applies corporate actions adjustments, maintains SCD2 security master to produce metrics. 
+
+## Key Data Issues Addressed in Pipeline
+- Temporal Correctness
+- Vendor Data Imperfections
+- Auditability
+- Operational Reliability
+
+## Main Goals
+- Ingest daily OHLCV price data as well as security reference data from vendor (Polygon.io)
+- Ingest macroeconomic reference data (e.g. risk free rates) from FRED
+- Normalize raw data into consistent schema with validation/anomaly flagging
+- Model corporate actions
+- Maintain SCD2 security master tracking for shares outstanding, ticker symbols, other security metadata over time
+- Materialize a daily as-of snapshot from the SCD2 for efficient downstream joins
+- Produce mart tables with decision-ready metrics
+- Ensure idempotent backfilss, deterministic transformations, and clear failure visibility
+
+## Out of Scope
+The following will be out of the scope of this effort:
+- Trading signals or strategy backtesting: scope is a data platform, not alpha research system
+- Price prediction or ML modeling: out of scope --> users can build models on top of outputs
+- real-time or streaming data: architecture here is batch-oriented (Airflow + dbt)
+- ETFs, options, futures, crypto, international equities: Scope is US common stocks only
+- Spine-offs, M&A, rights offerings, special dividends: corporate actions scope is limited to splits and ticker changes
+- user-facing dashboards or APIs: Output is warehouse tables, not application endpoints
+- Enterpirse observability: lightweight alerting only
