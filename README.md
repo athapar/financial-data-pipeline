@@ -1,6 +1,21 @@
 ## Financial Data Pipeline
 This is a data pipeline project ingesting financial data (specifically equity data) from Polygon.io and FRED via APIs and produces decision-ready analytics metrics. The pipeline is batch-oriented, normalizes and validates vendor data, applies corporate actions adjustments, maintains SCD2 security master to produce metrics. 
 
+
+## Quick start
+### 1. Configure .env
+```
+POLYGON_API_KEY=YOUR_API_KEY
+FRED_API_KEY=FRED_API_KEY
+```
+
+### Running first data pull
+```
+python -m financial_data_pipeline.cli --symbol SPY --start 2025-01-01 --end 2025-03-01
+```
+
+
+
 ## Key Data Issues Addressed in Pipeline
 - Temporal Correctness
 - Vendor Data Imperfections
