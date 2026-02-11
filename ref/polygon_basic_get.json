@@ -1,0 +1,117 @@
+{
+    "results": [
+        {
+            "cash_amount": 0.48975694000000003,
+            "currency": "USD",
+            "dividend_type": "CD",
+            "ex_dividend_date": "2030-12-13",
+            "frequency": 4,
+            "id": "E396fbae341a40e1373ea57ce984c386f06778209996e5ef713783aa9455588bc",
+            "pay_date": "2030-12-31",
+            "record_date": "2030-12-15",
+            "ticker": "GECCG"
+        },
+        {
+            "cash_amount": 0.484375,
+            "currency": "USD",
+            "dividend_type": "CD",
+            "ex_dividend_date": "2030-09-13",
+            "frequency": 4,
+            "id": "Edd95a7bbac516897f19e62104fce597fc22bed2b4fa9a88f55dba4e6b90cb84b",
+            "pay_date": "2030-09-30",
+            "record_date": "2030-09-15",
+            "ticker": "GECCG"
+        },
+        {
+            "cash_amount": 0.515625,
+            "currency": "USD",
+            "dividend_type": "CD",
+            "ex_dividend_date": "2030-07-15",
+            "frequency": 4,
+            "id": "E423cf49e82932f378c27034ec2bd6fe3830606caa42d3053ca794e420136ef1b",
+            "pay_date": "2030-07-30",
+            "record_date": "2030-07-15",
+            "ticker": "METCI"
+        },
+        {
+            "cash_amount": 0.47899305999999997,
+            "currency": "USD",
+            "dividend_type": "CD",
+            "ex_dividend_date": "2030-06-14",
+            "frequency": 4,
+            "id": "Ee89ffa0dc20c03663d643fdbdb9d85f34460b75a2c6f07d24c19b0b30e80cdc7",
+            "pay_date": "2030-06-30",
+            "record_date": "2030-06-15",
+            "ticker": "GECCG"
+        },
+        {
+            "cash_amount": 0.515625,
+            "currency": "USD",
+            "dividend_type": "CD",
+            "ex_dividend_date": "2030-04-15",
+            "frequency": 4,
+            "id": "Ee4b12dadef7b17bcd4e3d76116f70a5fc96fcab3db65099a65e944a937a5cecf",
+            "pay_date": "2030-04-30",
+            "record_date": "2030-04-15",
+            "ticker": "METCI"
+        },
+        {
+            "cash_amount": 0.484375,
+            "currency": "USD",
+            "dividend_type": "CD",
+            "ex_dividend_date": "2030-03-15",
+            "frequency": 4,
+            "id": "Ec34ea155d7551d9173210ad0e95af0c182a06a9fd8aac5dd0ccca247b268ecb1",
+            "pay_date": "2030-03-31",
+            "record_date": "2030-03-15",
+            "ticker": "GECCG"
+        },
+        {
+            "cash_amount": 0.515625,
+            "currency": "USD",
+            "dividend_type": "CD",
+            "ex_dividend_date": "2030-01-15",
+            "frequency": 4,
+            "id": "E17f2cf2abb9543b8bffd00f02f56b8a1a8a73122d569b86ad71af71ac358406d",
+            "pay_date": "2030-01-30",
+            "record_date": "2030-01-15",
+            "ticker": "METCI"
+        },
+        {
+            "cash_amount": 0.51345,
+            "currency": "USD",
+            "dividend_type": "CD",
+            "ex_dividend_date": "2029-12-14",
+            "frequency": 4,
+            "id": "E5517750748dca0bc3e1e237ccfd6468a93f3d2ab543dfcb8b4fef4ccb7b8e463",
+            "pay_date": "2029-12-31",
+            "record_date": "2029-12-15",
+            "ticker": "GECCH"
+        },
+        {
+            "cash_amount": 0.48975694000000003,
+            "currency": "USD",
+            "dividend_type": "CD",
+            "ex_dividend_date": "2029-12-14",
+            "frequency": 4,
+            "id": "E5d7b63304e28504869d352068e9f88fc8d611566ff2329e9107fdcc9a1cfc645",
+            "pay_date": "2029-12-31",
+            "record_date": "2029-12-15",
+            "ticker": "GECCG"
+        },
+        {
+            "cash_amount": 0.52344,
+            "currency": "USD",
+            "dividend_type": "CD",
+            "ex_dividend_date": "2029-10-15",
+            "frequency": 4,
+            "id": "E3ebcc99c39df43869a525f4d4a5c5adef586ddc1f477df744c862619c5316d0b",
+            "pay_date": "2029-10-30",
+            "record_date": "2029-10-15",
+            "ticker": "METCZ"
+        }
+    ],
+    "status": "OK",
+    "request_id": "14d9648a06699b40a668d130ac3777cf",
+    "next_url": "https://api.massive.com/v3/reference/dividends?cursor=YXA9MTAmYXM9JmxpbWl0PTEwJm9yZGVyPWRlc2Mmc29ydD1leF9kaXZpZGVuZF9kYXRl"
+}
