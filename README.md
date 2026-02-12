@@ -15,6 +15,17 @@ python -m financial_data_pipeline.cli --symbol SPY --start 2025-01-01 --end 2025
 ```
 
 
+## Development Roadmap (Incremental Build Plan)
+
+MVP0: Raw daily bars ingestion (SPY, AAPL) ✅
+MVP1: Response validation + error handling
+MVP2: Raw → structured normalization layer
+MVP3: Corporate actions modeling
+MVP4: SCD2 security master
+MVP5: Daily as-of snapshot + marts
+
+
+
 
 ## Key Data Issues Addressed in Pipeline
 - Temporal Correctness
