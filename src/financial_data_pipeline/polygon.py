@@ -46,6 +46,13 @@ def write_json_raw(payload, out_path):
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding = "utf-8")
 
+def write_jsonl_raw(rows, out_path):
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(out_path, "a") as file:
+        for bar in rows:
+            file.write(json.dumps(bar))
+            file.write("\n")
+
 
     
 
