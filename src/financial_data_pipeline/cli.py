@@ -3,9 +3,10 @@ import json
 from datetime import date, timedelta, datetime
 from pathlib import Path
 from financial_data_pipeline.config import POLYGON_API_KEY
-from financial_data_pipeline.polygon import PolygonClient, write_json_raw, write_jsonl_raw
+from financial_data_pipeline.polygon import PolygonClient, write_json_raw, write_jsonl_raw, merge_df_with_parquet
 import os
 from typing import Union
+import pandas as pd
 
 
 def load_sync_path(path):
@@ -79,49 +80,35 @@ def main():
         end = date.today()
     
     if start > end:
+        # No new data possible because DB start is ahead of today
         print(f"No new data. start = {start}, end = {end}")
         return
 
     else:
+        # Set up connection and fetch data
         client = PolygonClient(api_key=POLYGON_API_KEY)
         payload = client.get_bars_day(symbol=symbol, start=start, end=end)
-
-        out_dir = os.path.join(Path(args.out), symbol)
-        out_path = Path(os.path.join(out_dir, "bars.jsonl"))
         rows = payload.get("results", [])
-        set_sidecar_file(Path("data/raw/polygon/bars"), symbol)
+        rows_df = pd.DataFrame.from_dict(rows)
 
+        # Set up directories
+        out_dir = Path(args.out, symbol)
+        out_dir.mkdir(parents=True, exist_ok=True)
+        out_path = Path(out_dir, "bars.parquet")
+        prev_date = parse_date(sync_state.get(symbol+"_daily"))
+        
+        
 
-        # if end > parse_date(sync_state[symbol+"_daily"])+timedelta(days=1):
-        #     write_jsonl_raw(payload, out_path)
-        #     print(f"Wrote to: {out_path}")
-        # else:
-        #     print("Skipping writes")
-
-        if not rows:
-            print("No rows returned")
-            return
+        if rows_df.empty and not os.path.exists(Path("data/raw/polygon/bars", symbol, "bars.parquet")):
+            print("No data returned and no existing Parquet file. Nothing initialized.")
         else:
-            existing_ts_set = set()
-            with open(Path("data/raw/polygon/bars", symbol, 'bars_index.txt'), "r") as bt:
-                for line in bt:
-                    existing_ts_set.add(int(line.strip()))
-
-            max_t = max(r["t"] for r in rows)
-            prev_date = parse_date(sync_state.get(symbol + "_daily"))
-            new_max_date = date.fromtimestamp(max_t / 1000)
-            
-            rows_to_write = [r for r in rows if r['t'] not in existing_ts_set]
-            if rows_to_write:
-                write_jsonl_raw(rows_to_write, out_path)
-                print(f"Wrote to: {out_path}")
-            else:
-                print("No new data- timestamps exist in set")
-            
+            df = merge_df_with_parquet(rows_df, symbol)
+            max_t = df['t'].max()
+            new_max_date = max_t.date()
 
             if new_max_date > prev_date:
                 update_sync_state(Path("data/sync_state.json"), symbol, new_max_date.isoformat())        
-        
+            
 
 if __name__ == "__main__":
     # init_path = Path('data/raw/polygon/bars')
