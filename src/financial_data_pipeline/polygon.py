@@ -56,15 +56,18 @@ def write_jsonl_raw(rows, out_path):
 
 def merge_df_with_parquet(rows_df_in, symbol):
     rows_df_in["t"] = pd.to_datetime(rows_df_in['t'], unit='ms', utc=True)
-    parquet_path = Path("data/raw/polygon/bars", symbol, "bars.parquet")
+    parquet_parent_dir = Path("data/raw/polygon/bars") / symbol 
+    parquet_parent_dir.mkdir(parents=True, exist_ok=True)
+    parquet_path = parquet_parent_dir / "bars.parquet"
 
-    if Path.exists(parquet_path):
+    if parquet_path.exists():
         prev_data = pd.read_parquet(parquet_path)
         df = pd.concat([prev_data, rows_df_in])
         df = df.drop_duplicates(subset=['t'], keep="last")
     else:
         df = rows_df_in
         df = df.drop_duplicates(subset=['t'], keep="last")
+    
     if df.empty:
         print("No data to write")
         return
