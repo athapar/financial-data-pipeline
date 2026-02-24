@@ -6,10 +6,13 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 import requests
 import pandas as pd
+import shutil
 
 
 # POLYGON_REQUEST_URL = "https://api.massive.com/v3"
 POLYGON_REQUEST_URL = "https://api.polygon.io"
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+BARS_BASE_DIR = PROJECT_ROOT / "data" / "raw" / "polygon" / "bars"
 
 
 @dataclass(frozen=True)
@@ -54,14 +57,19 @@ def write_jsonl_raw(rows, out_path):
             file.write(json.dumps(bar))
             file.write("\n")
 
-def merge_df_with_parquet(rows_df_in, symbol):
+def merge_df_with_parquet(rows_df_in, symbol, out_dir: Path = BARS_BASE_DIR):
+    """
+    Goal is to export data to standard location (source of truth, but if out_path is different save a copy there too)
+    """
     rows_df_in["t"] = pd.to_datetime(rows_df_in['t'], unit='ms', utc=True)
-    parquet_parent_dir = Path("data/raw/polygon/bars") / symbol 
-    parquet_parent_dir.mkdir(parents=True, exist_ok=True)
-    parquet_path = parquet_parent_dir / "bars.parquet"
+    parquet_path = out_dir / symbol / "bars.parquet"
+    canonical_path = BARS_BASE_DIR / symbol / "bars.parquet"
+    canonical_path.parent.mkdir(parents=True, exist_ok = True)
+    is_export = parquet_path.resolve() != canonical_path.resolve()
 
-    if parquet_path.exists():
-        prev_data = pd.read_parquet(parquet_path)
+    if canonical_path.exists():
+        prev_data = pd.read_parquet(canonical_path)
+        prev_data['t'] = pd.to_datetime(prev_data["t"], utc=True)
         df = pd.concat([prev_data, rows_df_in])
         df = df.drop_duplicates(subset=['t'], keep="last")
     else:
@@ -73,8 +81,14 @@ def merge_df_with_parquet(rows_df_in, symbol):
         return
     else:
         df = df.sort_values(by=['t'])
-        df.to_parquet(parquet_path, index=False)
-        print(f"Wrote to {parquet_path}")
+        df.to_parquet(canonical_path, index=False)
+        print(f"Wrote to {canonical_path}")
+
+        if is_export:
+            parquet_path.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(canonical_path, parquet_path)
+            print(f"Copying to custom path {parquet_path}")
+
         return df
 
 

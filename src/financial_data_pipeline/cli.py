@@ -84,8 +84,9 @@ def main():
     p.add_argument("--symbol", required=True)
     p.add_argument("--start")
     p.add_argument("--end")
-    p.add_argument("--out", default=bars_base_dir)
+    p.add_argument("--out", default=None, type=Path)
     args = p.parse_args()
+
 
     symbol = args.symbol.upper()
 
@@ -97,7 +98,7 @@ def main():
             start = parse_date(sync_state[symbol+"_daily"])+timedelta(days=1)
             end = date.today()
         else:
-            start=parse_date("2025-01-01")
+            start=date.today() - timedelta(days=90)
             end=date.today()
     
     if start > end:
@@ -113,23 +114,31 @@ def main():
         rows_df = pd.DataFrame.from_dict(rows)
 
         # Set up directories
-        out_dir = Path(args.out, symbol)
-        out_dir.mkdir(parents=True, exist_ok=True)
-        out_path = Path(out_dir, "bars.parquet")
+        
         prev_date = parse_date(sync_state.get(symbol+"_daily"))
         prev_check = prev_date or date.min
 
         
 
-        if rows_df.empty and not os.path.exists(bars_base_dir, symbol, "bars.parquet"):
+        if rows_df.empty and not (bars_base_dir / symbol / "bars.parquet").exists():
             print("No data returned and no existing Parquet file. Nothing initialized.")
+            return
         else:
-            df = merge_df_with_parquet(rows_df, symbol)
-            max_t = df['t'].max()
-            new_max_date = max_t.date()
+            if args.out:
+                out_dir = args.out
+                out_dir.mkdir(parents=True, exist_ok=True)
+                df = merge_df_with_parquet(rows_df, symbol, out_dir)
+            else:
+                df = merge_df_with_parquet(rows_df, symbol)
 
-            if new_max_date > prev_check:
-                update_sync_state(sync_path, symbol, new_max_date.isoformat()) 
+            if df is None:
+                return 
+            else:
+                max_t = df['t'].max()
+                new_max_date = max_t.date()
+
+                if new_max_date > prev_check:
+                    update_sync_state(sync_path, symbol, new_max_date.isoformat()) 
 
                       
             
