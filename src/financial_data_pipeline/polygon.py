@@ -8,6 +8,9 @@ import requests
 import pandas as pd
 import shutil
 
+REQUIRED_COLUMNS = {"t", "o", "c", "h", "l", "v"}
+OPTIONAL_COLUMNS = {"vw", "n"}
+ALLOWED_COLUMNS = REQUIRED_COLUMNS | OPTIONAL_COLUMNS
 
 # POLYGON_REQUEST_URL = "https://api.massive.com/v3"
 POLYGON_REQUEST_URL = "https://api.polygon.io"
@@ -56,6 +59,27 @@ def write_jsonl_raw(rows, out_path):
         for bar in rows:
             file.write(json.dumps(bar))
             file.write("\n")
+
+def validate_schema(df: pd.DataFrame) -> None:
+    """
+    Enforce minimum schema requirements and check for optional columns
+    """
+    incoming_cols = set(df.columns)
+
+    missing = REQUIRED_COLUMNS - incoming_cols 
+
+    if missing:
+        raise ValueError(
+            f"Schema violation: missing required columns in data: {missing}"
+        )
+    
+    extra_cols = incoming_cols - ALLOWED_COLUMNS
+
+    if extra_cols:
+        f"[WARNING] Extra columns in data detected: {extra_cols}"
+
+
+
 
 def merge_df_with_parquet(rows_df_in, symbol, out_dir: Path = BARS_BASE_DIR):
     """

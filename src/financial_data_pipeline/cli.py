@@ -3,7 +3,7 @@ import json
 from datetime import date, timedelta, datetime
 from pathlib import Path
 from financial_data_pipeline.config import POLYGON_API_KEY
-from financial_data_pipeline.polygon import PolygonClient, write_json_raw, write_jsonl_raw, merge_df_with_parquet
+from financial_data_pipeline.polygon import PolygonClient, write_json_raw, write_jsonl_raw, merge_df_with_parquet, validate_schema
 import os
 from typing import Union
 import pandas as pd
@@ -111,34 +111,44 @@ def main():
         client = PolygonClient(api_key=POLYGON_API_KEY)
         payload = client.get_bars_day(symbol=symbol, start=start, end=end)
         rows = payload.get("results", [])
+
         rows_df = pd.DataFrame.from_dict(rows)
+        canonical_path = bars_base_dir / symbol / "bars.parquet"
+        canonical_exists = canonical_path.exists()
+
 
         # Set up directories
         
         prev_date = parse_date(sync_state.get(symbol+"_daily"))
         prev_check = prev_date or date.min
 
-        
 
-        if rows_df.empty and not (bars_base_dir / symbol / "bars.parquet").exists():
-            print("No data returned and no existing Parquet file. Nothing initialized.")
-            return
+        if rows_df.empty:
+            if not canonical_exists:
+                print("No data returned and no existing Parquet file. Nothing initialized.")
+                return
+            else:
+                print("No new data returned. Canonical storage file exists. Nothing written to it.")
+                return
+            
+        # Validate schema and check for drift
+        validate_schema(rows_df)
+
+        if args.out:
+            out_dir = args.out
+            out_dir.mkdir(parents=True, exist_ok=True)
+            df = merge_df_with_parquet(rows_df, symbol, out_dir)
         else:
-            if args.out:
-                out_dir = args.out
-                out_dir.mkdir(parents=True, exist_ok=True)
-                df = merge_df_with_parquet(rows_df, symbol, out_dir)
-            else:
-                df = merge_df_with_parquet(rows_df, symbol)
+            df = merge_df_with_parquet(rows_df, symbol)
 
-            if df is None:
-                return 
-            else:
-                max_t = df['t'].max()
-                new_max_date = max_t.date()
+        if df is None:
+            return 
+        else:
+            max_t = df['t'].max()
+            new_max_date = max_t.date()
 
-                if new_max_date > prev_check:
-                    update_sync_state(sync_path, symbol, new_max_date.isoformat()) 
+            if new_max_date > prev_check:
+                update_sync_state(sync_path, symbol, new_max_date.isoformat()) 
 
                       
             
