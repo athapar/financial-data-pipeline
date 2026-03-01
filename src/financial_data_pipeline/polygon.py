@@ -76,7 +76,7 @@ def validate_schema(df: pd.DataFrame) -> None:
     extra_cols = incoming_cols - ALLOWED_COLUMNS
 
     if extra_cols:
-        f"[WARNING] Extra columns in data detected: {extra_cols}"
+        print(f"[WARNING] Extra columns in data detected: {extra_cols}")
 
 
 
@@ -85,35 +85,48 @@ def merge_df_with_parquet(rows_df_in, symbol, out_dir: Path = BARS_BASE_DIR):
     """
     Goal is to export data to standard location (source of truth, but if out_path is different save a copy there too)
     """
-    rows_df_in["t"] = pd.to_datetime(rows_df_in['t'], unit='ms', utc=True)
+    if rows_df_in is None or rows_df_in.empty:
+        print("No new rows to merge. Quitting...")
+        return None
+    
+    validate_schema(rows_df_in) # Perform schema validation before any writes
+
+
+    rows_df = rows_df_in.copy() # Make copy to avoid mutating original argument df
+    rows_df["t"] = pd.to_datetime(rows_df['t'], unit='ms', utc=True) 
+
+    if rows_df["t"].duplicated().any():
+        raise ValueError("Duplicate timestamps detected in vendor payload")
+
+
     parquet_path = out_dir / symbol / "bars.parquet"
     canonical_path = BARS_BASE_DIR / symbol / "bars.parquet"
     canonical_path.parent.mkdir(parents=True, exist_ok = True)
     is_export = parquet_path.resolve() != canonical_path.resolve()
 
+    # Merge data with canonical file if it exists
     if canonical_path.exists():
         prev_data = pd.read_parquet(canonical_path)
         prev_data['t'] = pd.to_datetime(prev_data["t"], utc=True)
-        df = pd.concat([prev_data, rows_df_in])
-        df = df.drop_duplicates(subset=['t'], keep="last")
+        df = pd.concat([prev_data, rows_df], ignore_index=True)
     else:
-        df = rows_df_in
-        df = df.drop_duplicates(subset=['t'], keep="last")
+        df = rows_df
+
+    # Remove duplicates (idempotency)
+    df = df.drop_duplicates(subset=['t'], keep="last")
     
-    if df.empty:
-        print("No data to write")
-        return
-    else:
-        df = df.sort_values(by=['t'])
-        df.to_parquet(canonical_path, index=False)
-        print(f"Wrote to {canonical_path}")
+    # Write to canonical file
+    df = df.sort_values(by=['t'])
+    df.to_parquet(canonical_path, index=False)
+    print(f"Wrote to {canonical_path}")
 
-        if is_export:
-            parquet_path.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(canonical_path, parquet_path)
-            print(f"Copying to custom path {parquet_path}")
+    # Copy to another location if user specifies
+    if is_export:
+        parquet_path.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(canonical_path, parquet_path)
+        print(f"Copying to custom path {parquet_path}")
 
-        return df
+    return df
 
 
     

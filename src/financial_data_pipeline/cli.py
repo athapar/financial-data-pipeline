@@ -60,7 +60,9 @@ def update_sync_state_date(symbol: str, sync_state: dict, bars_dir: Path):
             data = json.loads(line)
             if data['t'] > max_t:
                 max_t = data['t']
-    prev_date = parse_date(sync_state.get(symbol + "_daily"))
+    prev_raw = sync_state.get(symbol + "_daily")
+    prev_date = parse_date(prev_raw) if prev_raw else date.min
+
     max_date = date.fromtimestamp(max_t / 1000)
 
     if  prev_date >= max_date:
@@ -92,7 +94,7 @@ def main():
 
     if args.start:
         start = parse_date(args.start)
-        end = parse_date(args.end)
+        end = parse_date(args.end) if args.end else date.today()
     else:
         if sync_state.get(symbol+"_daily"):
             start = parse_date(sync_state[symbol+"_daily"])+timedelta(days=1)
@@ -118,9 +120,8 @@ def main():
 
 
         # Set up directories
-        
-        prev_date = parse_date(sync_state.get(symbol+"_daily"))
-        prev_check = prev_date or date.min
+        prev_raw = sync_state.get(symbol+"_daily")
+        prev_date = parse_date(prev_raw) if prev_raw else date.min
 
 
         if rows_df.empty:
@@ -130,9 +131,6 @@ def main():
             else:
                 print("No new data returned. Canonical storage file exists. Nothing written to it.")
                 return
-            
-        # Validate schema and check for drift
-        validate_schema(rows_df)
 
         if args.out:
             out_dir = args.out
@@ -147,7 +145,7 @@ def main():
             max_t = df['t'].max()
             new_max_date = max_t.date()
 
-            if new_max_date > prev_check:
+            if new_max_date > prev_date:
                 update_sync_state(sync_path, symbol, new_max_date.isoformat()) 
 
                       
