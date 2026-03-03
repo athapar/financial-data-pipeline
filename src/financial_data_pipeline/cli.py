@@ -7,7 +7,7 @@ from financial_data_pipeline.polygon import PolygonClient, write_json_raw, write
 import os
 from typing import Union
 import pandas as pd
-
+from financial_data_pipeline.polygon import PROJECT_ROOT, BARS_BASE_DIR
 
 
 def load_sync_path(path: Path):
@@ -74,11 +74,11 @@ def update_sync_state_date(symbol: str, sync_state: dict, bars_dir: Path):
 
 def main():
     # Read current sync_state
-    project_root = Path(__file__).resolve().parents[2]
+    project_root = PROJECT_ROOT
     data_root = project_root / "data"
     data_root.mkdir(parents=True, exist_ok=True)
     sync_path = data_root / "sync_state.json"
-    bars_base_dir = data_root / "raw" / "polygon" / "bars"
+    bars_base_dir = BARS_BASE_DIR
 
     sync_state = load_sync_path(sync_path)
 
@@ -147,6 +147,9 @@ def main():
 
             if new_max_date > prev_date:
                 update_sync_state(sync_path, symbol, new_max_date.isoformat()) 
+                print(f"Updated sync_state: {symbol}_daily -> {new_max_date.isoformat()}")
+            else:
+                print("No state update needed")
 
                       
             
