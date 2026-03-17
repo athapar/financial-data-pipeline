@@ -166,10 +166,13 @@ def merge_df_with_parquet(
     duplicates_removed = incoming_count + existing_count - final_count
 
     print(f"Wrote to {canonical_path}")
-    print(
-        f"Merged {incoming_count} incoming rows with {existing_count} existing rows "
-        f"into {final_count} canonical rows. Removed {duplicates_removed} duplicates"
-    )
+    print(json.dumps({
+    "symbol": symbol,
+    "incoming_rows": incoming_count,
+    "existing_rows": existing_count,
+    "final_rows": final_count,
+    "duplicates_removed": duplicates_removed,
+    }))
 
     if export_base_dir is not None:
         export_path = export_base_dir / symbol / "bars.parquet"

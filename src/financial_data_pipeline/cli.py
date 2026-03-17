@@ -5,9 +5,10 @@ from pathlib import Path
 from financial_data_pipeline.config import POLYGON_API_KEY
 from financial_data_pipeline.polygon import PolygonClient, merge_df_with_parquet, validate_schema
 import os
-from typing import Union
+from typing import Union, Optional
 import pandas as pd
 from financial_data_pipeline.polygon import PROJECT_ROOT, BARS_BASE_DIR
+from dataclasses import dataclass
 
 
 def load_sync_path(path: Path) -> dict:
@@ -67,7 +68,11 @@ def parse_date(string: Union[str, None]) -> date:
     else:
         return
 
-def update_sync_state_date(symbol: str, sync_state: dict, bars_dir: Path):
+def update_sync_state_date(
+        symbol: str, 
+        sync_state: dict, 
+        bars_dir: Path
+        ):
     parent_dir = bars_dir / symbol 
     parent_dir.mkdir(parents=True, exist_ok=True)
     max_t = 0
@@ -87,6 +92,66 @@ def update_sync_state_date(symbol: str, sync_state: dict, bars_dir: Path):
         print(f"Previous sync date {prev_date} --> new date {max_date}")
     return max_date.isoformat()
 
+@dataclass(frozen=True)
+class FetchWindow:
+    start: date
+    end: date
+    mode: str  # "manual" | "incremental" | "bootstrap"
+
+def resolve_fetch_window(
+    symbol: str,
+    sync_state: dict,
+    start: Optional[str],
+    end: Optional[str],
+) -> FetchWindow:
+    """
+    Determine the fetch window for a symbol.
+
+    Modes:
+    - manual: user provided start (and optionally end)
+    - incremental: advance from last sync state
+    - bootstrap: no prior state exists
+
+    Returns:
+        FetchWindow with start, end, and mode
+    """
+
+    today = date.today()
+    key = f"{symbol}_daily" 
+
+    # --- Manual ---
+    if start:
+        start_date = parse_date(start)
+        end_date = parse_date(end) if end else today
+
+        if start_date is None:
+            raise ValueError("Invalid start date format")
+
+        if end_date is None:
+            raise ValueError("Invalid end date format")
+
+        if start_date > end_date:
+            raise ValueError(f"Invalid window: start {start_date} > end {end_date}")
+
+        return FetchWindow(start=start_date, end=end_date, mode="manual")
+
+    # --- Incremental ---
+    if key in sync_state:
+        prev_date = parse_date(sync_state[key])
+        if prev_date is None:
+            raise ValueError(f"Invalid stored sync date for {symbol}")
+
+        start_date = prev_date + timedelta(days=1)
+        end_date = today
+
+        return FetchWindow(start=start_date, end=end_date, mode="incremental")
+
+    # --- Bootstrap ---
+    start_date = today - timedelta(days=90)
+    end_date = today
+
+    return FetchWindow(start=start_date, end=end_date, mode="bootstrap")
+
 
 def main():
     
@@ -100,8 +165,6 @@ def main():
     sync_path = data_root / "sync_state.json"
     sync_state = load_sync_path(sync_path)
 
-    
-
     p = argparse.ArgumentParser()
     p.add_argument("--symbol", required=True)
     p.add_argument("--start")
@@ -109,29 +172,19 @@ def main():
     p.add_argument("--out", default=None, type=Path)
     args = p.parse_args()
 
-
     symbol = args.symbol.upper()
 
-    if args.start:
-        start = parse_date(args.start)
-        end = parse_date(args.end) if args.end else date.today()
-    else:
-        if sync_state.get(symbol+"_daily"):
-            start = parse_date(sync_state[symbol+"_daily"])+timedelta(days=1)
-            end = date.today()
-        else:
-            start=date.today() - timedelta(days=90)
-            end=date.today()
-    
-    if start > end:
+    window = resolve_fetch_window(symbol, sync_state, args.start, args.end)
+
+    if window.start > window.end:
         # No new data possible because DB start is ahead of today
-        print(f"No new data. start = {start}, end = {end}")
+        print(f"No new data. start = {window.start}, end = {window.end}")
         return
 
     else:
         # Set up connection and fetch data
         client = PolygonClient(api_key=POLYGON_API_KEY)
-        payload = client.get_bars_day(symbol=symbol, start=start, end=end)
+        payload = client.get_bars_day(symbol=symbol, start=window.start, end=window.end)
         rows = payload.get("results", [])
 
         rows_df = pd.DataFrame.from_dict(rows)
