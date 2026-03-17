@@ -31,19 +31,33 @@ def load_sync_path(path: Path) -> dict:
 #     return
 
 
-def update_sync_state(sync_file_path: Path, symbol: str, new_date: str):
+def update_sync_state(sync_file_path: Path, symbol: str, new_date: str) -> bool:
     """
-    Update sync data for single ticker
+    Update sync state for a symbol only if the new date is strictly newer.
+
+    Returns True if state was advanced, False otherwise.
     """
     if sync_file_path.exists():
-        with open(sync_file_path, "r", encoding='utf-8') as f:
+        with open(sync_file_path, "r", encoding="utf-8") as f:
             data = json.load(f)
     else:
         data = {}
 
-    data[symbol + "_daily"] = new_date
-    with open(sync_file_path, "w", encoding='utf-8') as newfile:
+    key = f"{symbol}_daily"
+    prev_raw = data.get(key)
+
+    if prev_raw is not None:
+        prev_date = date.fromisoformat(prev_raw)
+        candidate_date = date.fromisoformat(new_date)
+
+        if candidate_date <= prev_date:
+            return False
+
+    data[key] = new_date
+    with open(sync_file_path, "w", encoding="utf-8") as newfile:
         json.dump(data, newfile)
+
+    return True
 
 
 
