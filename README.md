@@ -57,3 +57,7 @@ The following will be out of the scope of this effort:
 - Spine-offs, M&A, rights offerings, special dividends: corporate actions scope is limited to splits and ticker changes
 - user-facing dashboards or APIs: Output is warehouse tables, not application endpoints
 - Enterpirse observability: lightweight alerting only
+
+
+## Considerations
+- Canonical parquet stores `t` as a UTC timestamp normalized from Polygon epoch-millisecond input.

@@ -3,45 +3,47 @@ import json
 from datetime import date, timedelta, datetime
 from pathlib import Path
 from financial_data_pipeline.config import POLYGON_API_KEY
-from financial_data_pipeline.polygon import PolygonClient, write_json_raw, write_jsonl_raw, merge_df_with_parquet, validate_schema
+from financial_data_pipeline.polygon import PolygonClient, merge_df_with_parquet, validate_schema
 import os
 from typing import Union
 import pandas as pd
 from financial_data_pipeline.polygon import PROJECT_ROOT, BARS_BASE_DIR
 
 
-def load_sync_path(path: Path):
+def load_sync_path(path: Path) -> dict:
+    """
+    Loads sync_state.json file if it exists. If it doesn't exist, write new empty json to that file. Returns dictionary.
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
     if not path.exists() or path.stat().st_size == 0:
         path.write_text("{}", encoding="utf-8")
-    return json.loads(path.read_text())
+    return json.loads(path.read_text(encoding="utf-8"))
 
-def set_sidecar_file(initial_path, symbol):
-    jsonl_path = Path(initial_path, symbol, 'bars.jsonl')
-    outpath = Path(initial_path, symbol, "bars_index.txt")
-    with open(jsonl_path, 'r') as file:
-        with open(outpath, 'w') as outfile:
-            for line in file:
-                _dict = json.loads(line)
-                t = _dict.get('t')
-                outfile.write(f"{t}\n")
-    return
+# def set_sidecar_file(initial_path, symbol):
+#     jsonl_path = Path(initial_path, symbol, 'bars.jsonl')
+#     outpath = Path(initial_path, symbol, "bars_index.txt")
+#     with open(jsonl_path, 'r') as file:
+#         with open(outpath, 'w') as outfile:
+#             for line in file:
+#                 _dict = json.loads(line)
+#                 t = _dict.get('t')
+#                 outfile.write(f"{t}\n")
+#     return
 
 
-def update_sync_state(sync_file_path, symbol, new_date):
+def update_sync_state(sync_file_path: Path, symbol: str, new_date: str):
+    """
+    Update sync data for single ticker
+    """
     if sync_file_path.exists():
         with open(sync_file_path, "r", encoding='utf-8') as f:
             data = json.load(f)
-        data[symbol + "_daily"] = new_date
-
-        with open(sync_file_path, "w") as newfile:
-            json.dump(data, newfile)
-
     else:
         data = {}
-        data[symbol + "_daily"] = new_date
-        with open(sync_file_path, "w") as newfile:
-            json.dump(data, newfile)
+
+    data[symbol + "_daily"] = new_date
+    with open(sync_file_path, "w", encoding='utf-8') as newfile:
+        json.dump(data, newfile)
 
 
 
@@ -73,14 +75,18 @@ def update_sync_state_date(symbol: str, sync_state: dict, bars_dir: Path):
 
 
 def main():
-    # Read current sync_state
+    
     project_root = PROJECT_ROOT
+
+    # Ensure data folder exists
     data_root = project_root / "data"
     data_root.mkdir(parents=True, exist_ok=True)
-    sync_path = data_root / "sync_state.json"
-    bars_base_dir = BARS_BASE_DIR
 
+    # Read current sync_state
+    sync_path = data_root / "sync_state.json"
     sync_state = load_sync_path(sync_path)
+
+    
 
     p = argparse.ArgumentParser()
     p.add_argument("--symbol", required=True)
@@ -115,7 +121,8 @@ def main():
         rows = payload.get("results", [])
 
         rows_df = pd.DataFrame.from_dict(rows)
-        canonical_path = bars_base_dir / symbol / "bars.parquet"
+
+        canonical_path = BARS_BASE_DIR / symbol / "bars.parquet"
         canonical_exists = canonical_path.exists()
 
 
