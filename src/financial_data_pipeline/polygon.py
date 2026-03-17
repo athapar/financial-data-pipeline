@@ -102,15 +102,18 @@ def validate_schema(df: pd.DataFrame) -> None:
             raise ValueError(f"Schema violation: non-finite values detected in column '{col}'")
     
 
-
-
-
-def merge_df_with_parquet(rows_df_in: pd.DataFrame, symbol: str, out_dir: Path = BARS_BASE_DIR) -> pd.DataFrame | None:
+def merge_df_with_parquet(
+    rows_df_in: pd.DataFrame,
+    symbol: str,
+    canonical_base_dir: Path = BARS_BASE_DIR,
+    export_base_dir: Path | None = None,
+) -> pd.DataFrame | None:
     """
     Merge a batch of daily bars into the canonical per-symbol parquet dataset.
 
     Storage invariant:
-    - One parquet file exists per symbol at: BARS_BASE_DIR / {symbol} / "bars.parquet"
+    - One canonical parquet file exists per symbol at:
+      canonical_base_dir / {symbol} / "bars.parquet"
     - Therefore row uniqueness within a file is enforced on timestamp `t`
 
     Behavior:
@@ -118,71 +121,64 @@ def merge_df_with_parquet(rows_df_in: pd.DataFrame, symbol: str, out_dir: Path =
     - normalizes timestamps to UTC
     - merges with existing canonical parquet if present
     - removes duplicate timestamps deterministically
-    - writes canonical parquet
+    - writes canonical parquet atomically
     - optionally copies canonical parquet to a user-specified export directory
     """
     if rows_df_in is None or rows_df_in.empty:
         print("No new rows to merge. Quitting...")
         return None
-    
-    validate_schema(rows_df_in) 
 
+    validate_schema(rows_df_in)
 
     rows_df = rows_df_in.copy()
     incoming_count = len(rows_df)
-    rows_df["t"] = pd.to_datetime(rows_df['t'], unit='ms', utc=True) 
+    rows_df["t"] = pd.to_datetime(rows_df["t"], unit="ms", utc=True)
 
-    dup_count = rows_df['t'].duplicated().sum()
+    dup_count = rows_df["t"].duplicated().sum()
     if dup_count:
         print(f"WARNING: {dup_count} duplicate timestamps in incoming payload. Deduplicating batch")
-        rows_df = rows_df.drop_duplicates(subset=['t'], keep='last')
+        rows_df = rows_df.drop_duplicates(subset=["t"], keep="last")
 
-    parquet_path = out_dir / symbol / "bars.parquet"
-    canonical_path = BARS_BASE_DIR / symbol / "bars.parquet"
-    
-    canonical_path.parent.mkdir(parents=True, exist_ok = True)
-    is_export = parquet_path.resolve() != canonical_path.resolve()
+    canonical_path = canonical_base_dir / symbol / "bars.parquet"
+    canonical_path.parent.mkdir(parents=True, exist_ok=True)
 
-    # Merge data with canonical file
     existing_count = 0
     if canonical_path.exists():
         prev_data = pd.read_parquet(canonical_path)
-        prev_data['t'] = pd.to_datetime(prev_data["t"], utc=True) # Note: canonical parquet stores  `t` as normalized UTC timestamp, not raw epoch milliseconds
-        df = pd.concat([prev_data, rows_df], ignore_index=True)
+        prev_data["t"] = pd.to_datetime(prev_data["t"], utc=True)
         existing_count = len(prev_data)
+        df = pd.concat([prev_data, rows_df], ignore_index=True)
     else:
         df = rows_df
 
-    # Remove duplicates (idempotency)
-    df = df.drop_duplicates(subset=['t'], keep="last") 
-    df = df.sort_values(by=['t']).reset_index(drop=True) # Pipeline assumes data will be for a single symbol and searches for duplicates along timestamps only
+    df = df.drop_duplicates(subset=["t"], keep="last")
+    df = df.sort_values(by=["t"]).reset_index(drop=True)
+
     canonical_cols = ["t", "o", "h", "l", "c", "v"]
     optional_cols_present = [col for col in ["vw", "n"] if col in df.columns]
     df = df[canonical_cols + optional_cols_present]
 
-    # Write to canonical file
-    tmp_path = canonical_path.with_suffix(f".tmp.{uuid.uuid4().hex}.parquet") # Write to a unique temp file first, then replace (ensure atomic parquet write)
+    tmp_path = canonical_path.with_suffix(f".tmp.{uuid.uuid4().hex}.parquet")
     df.to_parquet(tmp_path, index=False)
-    tmp_path.replace(canonical_path) 
+    tmp_path.replace(canonical_path)
 
-    
     final_count = len(df)
     duplicates_removed = incoming_count + existing_count - final_count
 
     print(f"Wrote to {canonical_path}")
     print(
-    f"Merged {incoming_count} incoming rows with {existing_count} existing rows "
-    f"into {final_count} canonical rows. Removed {duplicates_removed} duplicates"
+        f"Merged {incoming_count} incoming rows with {existing_count} existing rows "
+        f"into {final_count} canonical rows. Removed {duplicates_removed} duplicates"
     )
 
-    # Create copy to another location if user specifies
-    if is_export:
-        parquet_path.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(canonical_path, parquet_path)
-        print(f"Copying to custom path {parquet_path}")
+    if export_base_dir is not None:
+        export_path = export_base_dir / symbol / "bars.parquet"
+        if export_path.resolve() != canonical_path.resolve():
+            export_path.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(canonical_path, export_path)
+            print(f"Copied canonical parquet to custom path {export_path}")
 
     return df
-
 
     
 

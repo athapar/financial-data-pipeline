@@ -45,7 +45,7 @@ def test_validate_schema_fails_on_missing_required_column():
 def test_merge_writes_parquet_without_optional_columns(tmp_path: Path):
     df = make_required_df()
 
-    result = merge_df_with_parquet(df, symbol="TEST", out_dir=tmp_path)
+    result = merge_df_with_parquet(df, symbol="TEST", canonical_base_dir=tmp_path)
 
     assert result is not None
     assert list(result.columns) == ["t", "o", "h", "l", "c", "v"]
@@ -78,7 +78,7 @@ def test_merge_deduplicates_duplicate_timestamps_in_incoming_batch(tmp_path: Pat
         },
     ])
 
-    result = merge_df_with_parquet(df, symbol="TEST", out_dir=tmp_path)
+    result = merge_df_with_parquet(df, symbol="TEST", canonical_base_dir=tmp_path)
 
     assert result is not None
     assert len(result) == 1
@@ -124,8 +124,8 @@ def test_merge_deduplicates_overlap_with_existing_parquet(tmp_path: Path):
         },
     ])
 
-    merge_df_with_parquet(first_df, symbol="TEST", out_dir=tmp_path)
-    result = merge_df_with_parquet(second_df, symbol="TEST", out_dir=tmp_path)
+    merge_df_with_parquet(first_df, symbol="TEST", canonical_base_dir=tmp_path)
+    result = merge_df_with_parquet(second_df, symbol="TEST", canonical_base_dir=tmp_path)
 
     assert result is not None
     assert len(result) == 3
@@ -137,6 +137,6 @@ def test_merge_deduplicates_overlap_with_existing_parquet(tmp_path: Path):
 def test_merge_returns_none_on_empty_dataframe(tmp_path: Path):
     empty_df = pd.DataFrame()
 
-    result = merge_df_with_parquet(empty_df, symbol="TEST", out_dir=tmp_path)
+    result = merge_df_with_parquet(empty_df, symbol="TEST", canonical_base_dir=tmp_path)
 
     assert result is None
