@@ -1,0 +1,48 @@
+version: 2
+
+sources:
+  - name: raw
+    database: market-data-pipeline-490602
+    schema: marketdatapipeline
+    tables:
+      - name: daily_bars
+
+models:
+  - name: stg_daily_bars
+    columns:
+      - name: symbol
+        tests:
+          - not_null
+      - name: t
+        tests:
+          - not_null
+      - name: c
+        tests:
+          - not_null
+      - name: v
+        tests:
+          - not_null
+
+  - name: fact_daily_prices
+    columns:
+      - name: symbol
+        tests:
+          - not_null
+      - name: t
+        tests:
+          - not_null
+      - name: close_price
+        tests:
+          - not_null
+      - name: volume
+        tests:
+          - not_null
+
+  - name: mart_daily_returns
+    columns:
+      - name: symbol
+        tests:
+          - not_null
+      - name: t
+        tests:
+          - not_null
