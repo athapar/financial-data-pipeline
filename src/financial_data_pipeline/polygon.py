@@ -9,15 +9,13 @@ import pandas as pd
 import shutil
 import uuid
 import numpy as np
-
+from financial_data_pipeline.config import PROJECT_ROOT, BARS_BASE_DIR
 REQUIRED_COLUMNS = {"t", "o", "c", "h", "l", "v"}
 OPTIONAL_COLUMNS = {"vw", "n"}
 ALLOWED_COLUMNS = REQUIRED_COLUMNS | OPTIONAL_COLUMNS
 
 # POLYGON_REQUEST_URL = "https://api.massive.com/v3"
 POLYGON_REQUEST_URL = "https://api.polygon.io"
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-BARS_BASE_DIR = PROJECT_ROOT / "data" / "raw" / "polygon" / "bars"
 
 
 @dataclass(frozen=True)

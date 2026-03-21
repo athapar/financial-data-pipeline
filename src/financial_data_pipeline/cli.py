@@ -7,7 +7,7 @@ from financial_data_pipeline.polygon import PolygonClient, merge_df_with_parquet
 import os
 from typing import Union, Optional
 import pandas as pd
-from financial_data_pipeline.polygon import PROJECT_ROOT, BARS_BASE_DIR
+from financial_data_pipeline.config import PROJECT_ROOT, BARS_BASE_DIR
 from dataclasses import dataclass
 
 
