@@ -55,7 +55,15 @@ The data pipeline is structured as a set of deterministic, testable components:
 All components are unit tested and designed for deterministic behavior under reruns and backfills.
 
 
+### Warehouse Layer
 
+- raw source table in BigQuery: daily_bars
+
+- dbt staging model: stg_daily_bars
+
+- fact model: fact_daily_prices
+
+- mart: mart_daily_returns
 
 ## Quick Start
 
@@ -66,10 +74,14 @@ POLYGON_API_KEY=YOUR_API_KEY
 FRED_API_KEY=YOUR_FRED_API_KEY
 ```
 ### 2. Run first data pull
-`python -m financial_data_pipeline.cli --symbol SPY --start 2025-01-01 --end 2025-03-01`
+```bash
+python -m financial_data_pipeline.cli --symbol SPY --start 2025-01-01 --end 2025-03-01
+```
 
 ### 3. Run tests
-`python -m pytest -q`
+```bash
+python -m pytest -q
+```
 
 ### Reproducible Demo
 ```bash
