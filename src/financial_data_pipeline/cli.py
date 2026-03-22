@@ -20,17 +20,6 @@ def load_sync_path(path: Path) -> dict:
         path.write_text("{}", encoding="utf-8")
     return json.loads(path.read_text(encoding="utf-8"))
 
-# def set_sidecar_file(initial_path, symbol):
-#     jsonl_path = Path(initial_path, symbol, 'bars.jsonl')
-#     outpath = Path(initial_path, symbol, "bars_index.txt")
-#     with open(jsonl_path, 'r') as file:
-#         with open(outpath, 'w') as outfile:
-#             for line in file:
-#                 _dict = json.loads(line)
-#                 t = _dict.get('t')
-#                 outfile.write(f"{t}\n")
-#     return
-
 
 def update_sync_state(sync_file_path: Path, symbol: str, new_date: str) -> bool:
     """
@@ -67,30 +56,6 @@ def parse_date(string: Union[str, None]) -> date:
         return date.fromisoformat(string)
     else:
         return
-
-def update_sync_state_date(
-        symbol: str, 
-        sync_state: dict, 
-        bars_dir: Path
-        ):
-    parent_dir = bars_dir / symbol 
-    parent_dir.mkdir(parents=True, exist_ok=True)
-    max_t = 0
-    with open(Path(parent_dir, "bars.jsonl")) as f:
-        for line in f.readlines():
-            data = json.loads(line)
-            if data['t'] > max_t:
-                max_t = data['t']
-    prev_raw = sync_state.get(symbol + "_daily")
-    prev_date = parse_date(prev_raw) if prev_raw else date.min
-
-    max_date = date.fromtimestamp(max_t / 1000)
-
-    if  prev_date >= max_date:
-        print("Already up to date")
-    else:
-        print(f"Previous sync date {prev_date} --> new date {max_date}")
-    return max_date.isoformat()
 
 @dataclass(frozen=True)
 class FetchWindow:
@@ -224,19 +189,3 @@ def main():
                 print(f"Updated sync_state: {symbol}_daily -> {new_max_date.isoformat()}")
             else:
                 print("No state update needed")
-
-                      
-            
-
-if __name__ == "__main__":
-    # init_path = Path('data/raw/polygon/bars')
-    # set_sidecar_file(init_path, 'AAPL')
-    main()
-
-    # with open('data\sync_state.json','r') as file:
-    #     sync_state = json.load(file)
-
-    # max_date = update_sync_state_date('AAPL', sync_state)
-    # print(max_date)
-
-
