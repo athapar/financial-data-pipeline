@@ -129,6 +129,7 @@ def merge_df_with_parquet(
     validate_schema(rows_df_in)
 
     rows_df = rows_df_in.copy()
+    rows_df['symbol'] = symbol
     incoming_count = len(rows_df)
     rows_df["t"] = pd.to_datetime(rows_df["t"], unit="ms", utc=True)
 
@@ -152,7 +153,7 @@ def merge_df_with_parquet(
     df = df.drop_duplicates(subset=["t"], keep="last")
     df = df.sort_values(by=["t"]).reset_index(drop=True)
 
-    canonical_cols = ["t", "o", "h", "l", "c", "v"]
+    canonical_cols = ["symbol", "t", "o", "h", "l", "c", "v"]
     optional_cols_present = [col for col in ["vw", "n"] if col in df.columns]
     df = df[canonical_cols + optional_cols_present]
 

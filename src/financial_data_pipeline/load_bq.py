@@ -9,8 +9,7 @@ def bq_table(table_name: str) -> str:
 def load_parquet_to_bigquery(parquet_path: Path, destination_table: str, symbol: str, mode: str="WRITE_APPEND") -> None:
     client = bigquery.Client(project = BQ_PROJECT_ID)
     df = pd.read_parquet(parquet_path)
-
-    df['symbol'] = symbol
+    
     job = client.load_table_from_dataframe(
         df,
         destination_table,
