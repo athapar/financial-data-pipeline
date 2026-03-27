@@ -19,3 +19,15 @@ def load_parquet_to_bigquery(parquet_path: Path, destination_table: str, mode: s
     print(f"Loaded {len(df)} rows to {destination_table}")
     return None
 
+def truncate_table(target_table: str):
+    client = bigquery.Client(project = BQ_PROJECT_ID)
+    df = pd.DataFrame()
+
+    job = client.load_table_from_dataframe(
+        df,
+        target_table,
+        job_config=bigquery.LoadJobConfig(write_disposition="WRITE_TRUNCATE"),
+    )
+    job.result()
+    print(f"Cleared table {target_table}")
+    return None
