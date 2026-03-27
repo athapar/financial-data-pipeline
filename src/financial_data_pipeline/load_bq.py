@@ -17,4 +17,5 @@ def load_parquet_to_bigquery(parquet_path: Path, destination_table: str, mode: s
     )
     job.result()
     print(f"Loaded {len(df)} rows to {destination_table}")
+    return None
 
