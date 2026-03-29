@@ -1,4 +1,4 @@
-from financial_data_pipeline.polygon import PolygonClient, merge_df_with_parquet, save_splits_parquet
+from financial_data_pipeline.polygon import PolygonClient, merge_df_with_parquet, save_splits_parquet, save_ticker_parquet
 from financial_data_pipeline.cli import resolve_fetch_window, update_sync_state
 from pathlib import Path
 from typing import Optional
@@ -80,10 +80,8 @@ def run_splits_ingestion(
     Orchestrates full splits ingestion flow a single symbol
 
     Steps:
-    - resolve fetch window
     - fetch data
     - merge into canonical parquet
-    - advance sync state
 
     Returns structured metadata for observability
     """
@@ -108,4 +106,41 @@ def run_splits_ingestion(
         "symbol": symbol,
         "status": "success",
         "rows": len(result_df),
+    }
+
+
+def run_ticker_ingestion(
+        symbol: str,
+        client: PolygonClient,
+        canonical_base_dir: Path,
+) -> dict:
+    """
+    Orchestrates full ticker ingestion flow a single symbol
+
+    Steps:
+    - fetch data
+    - Replace existing value for ticker
+
+    Returns structured metadata for observability
+    """
+    payload = client.get_ticker(symbol)
+
+    results = payload.get("results", [])
+
+    if not results:
+        return {
+            "symbol": symbol,
+            "status": "no_op",
+            "reason": "empty_payload",
+        }
+
+    df = pd.DataFrame(results)
+    result_df = save_ticker_parquet(
+        df,
+        symbol=symbol,
+        canonical_base_dir=canonical_base_dir,
+    )
+    return {
+        "symbol": symbol,
+        "status": "success",
     }
