@@ -1,5 +1,5 @@
 from financial_data_pipeline.load_bq import bq_table, load_parquet_to_bigquery, truncate_table
-from financial_data_pipeline.config import BQ_PROJECT_ID, BQ_DATASET_ID, PROJECT_ROOT, SYNC_STATE_PATH, BARS_BASE_DIR, WAREHOUSE_DIR
+from financial_data_pipeline.config import PROJECT_ROOT, SYNC_STATE_PATH, BARS_BASE_DIR, WAREHOUSE_DIR
 from financial_data_pipeline.polygon import PolygonClient
 from financial_data_pipeline.orchestrator import run_symbol_ingestion
 from financial_data_pipeline.config import POLYGON_API_KEY
