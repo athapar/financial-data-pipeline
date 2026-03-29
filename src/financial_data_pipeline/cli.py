@@ -1,10 +1,9 @@
 import argparse
 import json
-from datetime import date, timedelta, datetime
+from datetime import date, timedelta
 from pathlib import Path
 from financial_data_pipeline.config import POLYGON_API_KEY
-from financial_data_pipeline.polygon import PolygonClient, merge_df_with_parquet, validate_schema
-import os
+from financial_data_pipeline.polygon import PolygonClient, merge_df_with_parquet
 from typing import Union, Optional
 import pandas as pd
 from financial_data_pipeline.config import PROJECT_ROOT, BARS_BASE_DIR
