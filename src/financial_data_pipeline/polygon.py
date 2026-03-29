@@ -9,11 +9,16 @@ import pandas as pd
 import shutil
 import uuid
 import numpy as np
-from financial_data_pipeline.config import PROJECT_ROOT, BARS_BASE_DIR
-REQUIRED_COLUMNS = {"t", "o", "c", "h", "l", "v"}
-OPTIONAL_COLUMNS = {"vw", "n"}
-ALLOWED_COLUMNS = REQUIRED_COLUMNS | OPTIONAL_COLUMNS
-
+from financial_data_pipeline.config import PROJECT_ROOT, BARS_BASE_DIR, SPLITS_BASE_DIR, TICKER_BASE_DIR
+BARS_REQUIRED_COLUMNS = {"t", "o", "c", "h", "l", "v"}
+BARS_OPTIONAL_COLUMNS = {"vw", "n"}
+BARS_ALLOWED_COLUMNS = BARS_REQUIRED_COLUMNS | BARS_OPTIONAL_COLUMNS
+SPLITS_REQUIRED_COLUMNS = {'execution_date', 'id', 'split_from', 'split_to', 'ticker'}
+SPLITS_OPTIONAL_COLUMNS = set()
+SPLITS_ALLOWED_COLUMNS = SPLITS_REQUIRED_COLUMNS | SPLITS_OPTIONAL_COLUMNS
+TICKER_REQUIRED_COLUMNS = {'ticker', 'name', 'market', 'locale', 'primary_exchange', 'type', 'active', 
+                           'currency_name', 'cik', 'composite_figi'}
+TICKER_OPTIONAL_COLUMNS = {'share_class_figi', 'last_updated_utc'}
 # POLYGON_REQUEST_URL = "https://api.massive.com/v3"
 POLYGON_REQUEST_URL = "https://api.polygon.io"
 
@@ -34,7 +39,8 @@ class PolygonClient:
             adjusted: bool = True, 
             sort: str = "asc",
             limit: int = 50000,
-        ) -> Dict[str, Any]:
+) -> Dict[str, Any]:
+        
         # v2 aggreages bars endpoint
         url = f"{POLYGON_REQUEST_URL}/v2/aggs/ticker/{symbol}/range/1/day/{start.isoformat()}/{end.isoformat()}"
         params = {
@@ -47,22 +53,65 @@ class PolygonClient:
         r = self._session().get(url, params=params, timeout=30)
         r.raise_for_status()
         return r.json()
-    
 
-def validate_schema(df: pd.DataFrame) -> None:
+
+    def get_splits(
+            self,
+            symbol: str,
+            order: str = "asc",
+) -> Dict[str, any]:
+        
+        url = f"{POLYGON_REQUEST_URL}/v3/reference/splits"
+        params = {
+            "ticker": symbol,
+            "order": order,
+            "apiKey": self.api_key,
+        }
+
+        r = self._session().get(url, params=params, timeout=30)
+        r.raise_for_status()
+        return r.json()
+    
+    def get_ticker(
+        self,
+        symbol: str,
+        market: str = "stocks",
+        locale: str = 'us',
+        _type: str= "CS",
+        active: bool= True,
+        order: str = "asc"
+) -> Dict[str, any]:
+        
+        url = f"{POLYGON_REQUEST_URL}/v3/reference/tickers"
+        params = {
+            "ticker": symbol,
+            # "adjustment_type.any_of": "forward_split,reverse_split",
+            "order": order,
+            "apiKey": self.api_key,
+            "market": market,
+            "locale": locale,
+            "type": _type,
+            "active": active
+        }
+
+        r = self._session().get(url, params=params, timeout=30)
+        r.raise_for_status()
+        return r.json()
+
+def validate_bars_schema(df: pd.DataFrame) -> None:
     """
-    Enforce minimum schema requirements and check for optional columns
+    Enforce minimum schema requirements daily prices data and check for optional columns
     """
     incoming_cols = set(df.columns)
 
-    missing = REQUIRED_COLUMNS - incoming_cols 
+    missing = BARS_REQUIRED_COLUMNS - incoming_cols 
 
     if missing:
         raise ValueError(
             f"Schema violation: missing required columns in data: {missing}"
         )
     
-    extra_cols = incoming_cols - ALLOWED_COLUMNS
+    extra_cols = incoming_cols - BARS_ALLOWED_COLUMNS
 
     if extra_cols:
         print(f"[WARNING] Extra columns in data detected: {extra_cols}")
@@ -99,6 +148,48 @@ def validate_schema(df: pd.DataFrame) -> None:
         if not np.isfinite(df[col]).all():
             raise ValueError(f"Schema violation: non-finite values detected in column '{col}'")
     
+def validate_splits_schema(df: pd.DataFrame) -> None:
+    """
+    Enforce minimum schema requirements on splits data and check for optional columns
+    """
+    incoming_cols = set(df.columns)
+
+    missing = SPLITS_REQUIRED_COLUMNS - incoming_cols 
+
+    if missing:
+        raise ValueError(
+            f"Schema violation: missing required columns in data: {missing}"
+        )
+    
+    extra_cols = incoming_cols - SPLITS_ALLOWED_COLUMNS
+
+    if extra_cols:
+        print(f"[WARNING] Extra columns in data detected: {extra_cols}")
+
+    if df["execution_date"].isna().any():
+        raise ValueError("Schema violation: null execution_date values detected in payload")
+    try:
+        pd.to_datetime(df["execution_date"])
+    except Exception as e:
+        raise ValueError(f"Schema violation: column 'execution_date' could not be parsed as a date: {e}")
+    
+    numeric_cols = ['split_from', 'split_to']
+    for col in numeric_cols:
+        if df[col].isna().any():
+            raise ValueError(
+                f"Schema violation: null values detected in required column {col}"
+            )
+        if not pd.api.types.is_numeric_dtype(df[col]):
+            raise ValueError(f"Schema violation: column '{col}' must be numeric")
+        
+        if not np.isfinite(df[col]).all():
+            raise ValueError(f"Schema violation: non-finite values detected in column '{col}'")
+        
+    
+
+
+
+
 
 def merge_df_with_parquet(
     rows_df_in: pd.DataFrame,
@@ -126,7 +217,7 @@ def merge_df_with_parquet(
         print("No new rows to merge. Quitting...")
         return None
 
-    validate_schema(rows_df_in)
+    validate_bars_schema(rows_df_in)
 
     rows_df = rows_df_in.copy()
     rows_df['symbol'] = symbol
@@ -181,6 +272,76 @@ def merge_df_with_parquet(
             print(f"Copied canonical parquet to custom path {export_path}")
 
     return df
+
+
+def save_splits_parquet(
+    rows_df_in: pd.DataFrame,
+    symbol: str,
+    canonical_base_dir: Path = SPLITS_BASE_DIR,
+    export_base_dir: Path | None = None,
+) -> pd.DataFrame | None:
+    
+    if rows_df_in is None or rows_df_in.empty:
+        print("No new splits to merge. Quitting...")
+        return None
+    
+    validate_splits_schema(rows_df_in)
+
+    
+    rows_df = rows_df_in.copy()
+    incoming_count = len(rows_df)
+    
+    rows_df["execution_date"] = pd.to_datetime(rows_df["execution_date"]).dt.normalize()
+
+    dup_count = rows_df["execution_date"].duplicated().sum()
+    if dup_count:
+        print(f"WARNING: {dup_count} duplicate timestamps in incoming payload. Deduplicating batch")
+        rows_df = rows_df.drop_duplicates(subset=["execution_date"], keep="last")
+
+    canonical_path = canonical_base_dir / symbol / "splits.parquet"
+    canonical_path.parent.mkdir(parents=True, exist_ok=True)
+
+    existing_count = 0
+    if canonical_path.exists():
+        prev_data = pd.read_parquet(canonical_path)
+        prev_data["execution_date"] = pd.to_datetime(prev_data["execution_date"]).dt.normalize()
+        existing_count = len(prev_data)
+        df = pd.concat([prev_data, rows_df], ignore_index=True)
+    else:
+        df = rows_df
+
+    df = df.drop_duplicates(subset=["execution_date"], keep="last")
+    df = df.sort_values(by=["execution_date"]).reset_index(drop=True)
+
+    canonical_cols = ['ticker', 'execution_date', 'id', 'split_from', 'split_to']
+    df = df[canonical_cols]
+
+    tmp_path = canonical_path.with_suffix(f".tmp.{uuid.uuid4().hex}.parquet")
+    df.to_parquet(tmp_path, index=False)
+    tmp_path.replace(canonical_path)
+
+    final_count = len(df)
+    duplicates_removed = incoming_count + existing_count - final_count
+
+    print(f"Wrote splits data to {canonical_path}")
+    print(json.dumps({
+    "symbol": symbol,
+    "incoming_rows": incoming_count,
+    "existing_rows": existing_count,
+    "final_rows": final_count,
+    "duplicates_removed": duplicates_removed,
+    }))
+
+    if export_base_dir is not None:
+        export_path = export_base_dir / symbol / "splits.parquet"
+        if export_path.resolve() != canonical_path.resolve():
+            export_path.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(canonical_path, export_path)
+            print(f"Copied canonical parquet to custom path {export_path}")
+
+    return df
+
+
 
     
 
