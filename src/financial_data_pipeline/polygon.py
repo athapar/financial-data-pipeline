@@ -37,7 +37,7 @@ class PolygonClient:
             symbol: str,
             start: date,
             end: date,
-            adjusted: bool = True, 
+            adjusted: bool = False, 
             sort: str = "asc",
             limit: int = 50000,
 ) -> Dict[str, Any]:
