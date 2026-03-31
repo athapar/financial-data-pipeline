@@ -6,6 +6,8 @@ sources:
     schema: marketdatapipeline
     tables:
       - name: daily_bars
+      - name: splits
+      - name: tickers
 
 models:
   - name: stg_daily_bars
