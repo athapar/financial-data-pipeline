@@ -11,16 +11,23 @@ sources:
 
 models:
   - name: stg_daily_bars
+    description: >
+      Daily OHLCV bars sourced from raw.daily_bars (Polygon.io).
+      One row per (symbol, timestamp).
     columns:
       - name: symbol
+        description: Stock/Security ticker
         tests:
           - not_null
       - name: t
+        description: timestamp in UTC
         tests:
           - not_null
       - name: c
+        description: Closing price
         tests:
           - not_null
       - name: v
+        description: Trading volume
         tests:
           - not_null

@@ -1,33 +1,58 @@
 version: 2
 
 models:
-
-  - name: mart_daily_returns
-    columns:
-      - name: composite_figi
-        tests:
-          - not_null
-      - name: ticker
-        tests:
-          - not_null
-      - name: price_date
-        tests:
-          - not_null
-
   - name: fact_daily_prices
+    description: >
+      Grain: (composite_figi, price_date). Split-adjusted daily OHLCV prices
+      keyed by composite_figi from Polygon FIGI.
+      Prices adjusted by int_split_adjustment_factors: continuous
+      time-series across splits. Ticker carried as display
+      attribute only. Joins on composite_figi for point in time correctness.
     columns:
       - name: composite_figi
+        description: Composite Financial Instrument Global Identifier (FIGI)
         tests:
           - not_null
       - name: ticker
+        description: Stock/Security ticker
         tests:
           - not_null
       - name: price_date
+        description: Calendar date associated with price
         tests:
           - not_null
       - name: close_price
+        description: Closing price
         tests:
           - not_null
       - name: volume
+        description: Trading volume
         tests:
           - not_null
+
+  - name: mart_daily_returns
+    description: >
+      Grain: (composite_figi, price_date). Daily close-to-close returns
+      computed on split-adjusted prices from fact_daily_prices. Includes
+      rolling 20-day and 60-day return volatility. Note: First row per security
+      has null daily_return by design. volatility_60d is null until 60
+      trading days of history exist
+    columns:
+      - name: composite_figi
+        description: Composite Financial Instrument Global Identifier (FIGI)
+        tests:
+          - not_null
+      - name: ticker
+        description: Stock/Security ticker
+        tests:
+          - not_null
+      - name: price_date
+        description: Calendar date associated with price
+        tests:
+          - not_null
+      - name: daily_return
+        description: Daily return calculated as the percentage change in closing price from the previous trading day
+      - name: volatility_20d
+        description: Rolling 20 day standard deviation of daily returns
+      - name: volatility_60d
+        description: Rolling 60 day standard deviation of daily returns

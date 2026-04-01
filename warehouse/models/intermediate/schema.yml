@@ -2,13 +2,23 @@ version: 2
 
 models:
   - name: int_split_adjustment_factors
+    description: >
+      Cumulative split adjustment multiplier per (composite_figi, price_date)
+      For each date, the adjustment_factor equals the product of all split_to/split_from
+      ratios for splits that occurred after that date. Divide raw prices by
+      this factor to produce split-adjusted prices. Factor = 1.0 where no
+      future splits exist
     columns:
       - name: composite_figi
-        tests:
-          - not_null
-      - name: adjustment_factor
+        description: Composite Financial Instrument Global Identifier (FIGI)
         tests:
           - not_null
       - name: price_date
+        description: Calendar date associated with price
         tests:
           - not_null
+      - name: adjustment_factor
+        description: Product of all split_to/split_from ratios for splits occurring after price_date
+        tests:
+          - not_null
+
