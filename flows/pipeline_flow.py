@@ -52,6 +52,7 @@ def load_ticker_to_bq(symbol: str, table: str) -> None:
 
 @task(log_prints=True)
 def run_dbt():
+    subprocess.run(["dbt", "snapshot"], cwd=WAREHOUSE_DIR, check=True) # Update security master before running pipeline
     subprocess.run(["dbt", "run"], cwd=WAREHOUSE_DIR, check=True)
     subprocess.run(["dbt", "test"], cwd=WAREHOUSE_DIR, check=True)
     
