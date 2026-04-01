@@ -1,0 +1,14 @@
+version: 2
+
+models:
+  - name: int_split_adjustment_factors
+    columns:
+      - name: composite_figi
+        tests:
+          - not_null
+      - name: adjustment_factor
+        tests:
+          - not_null
+      - name: price_date
+        tests:
+          - not_null
