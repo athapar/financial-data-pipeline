@@ -2,7 +2,7 @@ import pandas as pd
 import pytest
 from pathlib import Path
 
-from financial_data_pipeline.polygon import validate_schema, merge_df_with_parquet
+from financial_data_pipeline.polygon import validate_bars_schema, merge_df_with_parquet
 
 
 def make_required_df():
@@ -39,7 +39,7 @@ def test_validate_schema_fails_on_missing_required_column():
     ])
 
     with pytest.raises(ValueError, match="missing required columns"):
-        validate_schema(bad_df)
+        validate_bars_schema(bad_df)
 
 
 def test_merge_writes_parquet_without_optional_columns(tmp_path: Path):
