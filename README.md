@@ -13,7 +13,7 @@ The system separates ingestion, storage, and transformation to enforce correctne
 
 ![Architecture](./docs/architecture.png)
 
-Transformations are implemented in dbt across staging, intermediate, and mart layers. The `composite_figi` is used instead of `ticker` to maintain identity across time, and an SCD2 snapshot tracks changes in ticker metadata. Split adjustments are computed explicitily in an intermediate layer and applied downstream to produce point-in -time correct prices. This layered design ensure idempotent ingestion, deterministic transformations, and reproducibile analytical outputs. 
+Transformations are implemented in dbt across staging, intermediate, and mart layers. The `composite_figi` is used instead of `ticker` to maintain identity across time, and an SCD2 snapshot tracks changes in ticker metadata. Split adjustments are computed explicitly in an intermediate layer and applied downstream to produce point-in-time correct prices. This layered design ensures idempotent ingestion, deterministic transformations, and reproducible analytical outputs. 
 
 
 ## 3. Key Design Decisions
@@ -24,10 +24,10 @@ Transformations are implemented in dbt across staging, intermediate, and mart la
   Tickers are not stable identifiers (e.g. FB → META). A slowly changing dimension keyed on `composite_figi` preserves security identity over time and enables correct point-in-time joins.
 
 * **Idempotent ingestion**
-  Ingestion is designed to support safe reruns and overlapping backfills via dedup on `(ticker, date)`. This ensures that pipeline is repeatable and does not introduce data drift.
+  Ingestion is designed to support safe reruns and overlapping backfills via dedup on `(ticker, date)`. This ensures that the pipeline is repeatable and does not introduce data drift.
 
 * **Intermediate layer separation**
-  Business logic such as split adjustment is isolated in intermediate layer instead of staging or fact models. This keeps transformations testable and easier to validate.
+  Business logic such as split adjustment is isolated in the intermediate layer instead of staging or fact models. This keeps transformations testable and easier to validate.
 
 
 ## 4. Data Quality Guarantees
@@ -57,47 +57,23 @@ GOOGLE_CLOUD_PROJECT=GOOGLE_CLOUD_PROJECT_ID
 BQ_DATASET_ID=BIG_QUERY_DATASET_ID
 GOOGLE_APPLICATION_CREDENTIALS=PATH_TO_CREDENTIALS_JSON
 ```
-### 2. Run first data pull
-```bash
-python -m financial_data_pipeline.cli --symbol SPY --start 2025-01-01 --end 2025-03-01
-```
+### 2. Set up import list
+Add tickers to import in `symbols.txt` for universe of stocks.
 
 ### 3. Run tests
 ```bash
 python -m pytest -q
+cd warehouse && dbt test
 ```
 
-### Reproducible Demo
+### 4. Run Pipeline
 ```bash
-# 1. bootstrap
-python -m financial_data_pipeline.cli --symbol AAPL 
-
-# 2. rerun (no-op)
-python -m financial_data_pipeline.cli --symbol AAPL
-
-# 3. overlap backfill
-python -m financial_data_pipeline.cli --symbol AAPL --start 2025-12-01 --end 2026-01-01
-```
-Example output (truncated)
-```bash
-# 1. bootstrap
-{"symbol": "AAPL", "incoming_rows": 61, "existing_rows": 0, "final_rows": 61, "duplicates_removed": 0}
-Updated sync_state: AAPL_daily -> 2026-03-17
-
-# 2. rerun (no-op)
-No new data. start = 2026-03-18, end = 2026-03-17
-
-# 3. overlap backfill
-{"symbol": "AAPL", "incoming_rows": 22, "existing_rows": 61, "final_rows": 73, "duplicates_removed": 10}
-No state update needed
+# Run the full pipeline
+cd flows
+python -m pipeline_flow
 ```
 
-Expected behavior:
-* No duplicate timestamps
-* Canonical dataset remains deduplicated
-* Sync state only advances forward
-
-### Repository Structure
+## Repository Structure
 ```text
 src/
   financial_data_pipeline/
@@ -130,20 +106,13 @@ tests/
 ## Known Gaps + Roadmap
 
 * **SCD2 historical backfill gap**
-  Current snapshots are forward-looking from initial load. Full historical reconstruction of security master state is not yet implemented.
+  * Current snapshots are forward-looking from initial load. Full historical reconstruction of security master state is not yet implemented.
 
 * **Corporate actions expansion**
-  Only split adjustments are modeled. Dividends and total return adjustments are not yet included.
+  * Only split adjustments are modeled. Dividends and total return adjustments are not yet included.
 
 * **Macro data integration (FRED)**
-  Planned but not yet integrated into downstream marts.
+  * Planned but not yet integrated into downstream marts.
 
 * **Incremental dbt models**
-  Current models run in full-refresh mode; incremental strategies are planned for scalability.
-
-## Design Notes
-
-* Storage is currently one parquet file per ticker
-* Row uniqueness is enforced on timestamp within each ticker dataset
-* The current project is intentionally batch-oriented, not streaming
-* The current artifact is focused on ingestion correctness and data engineering fundamentals 
+  * Current models run in full-refresh mode; incremental strategies are planned for scalability.
