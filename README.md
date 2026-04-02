@@ -1,69 +1,51 @@
 # Financial Data Pipeline
+![Architecture](./docs/architecture_preview.png)
+## 1. Project Summary
+This project is a batch-oriented financial data pipeline that constructs point-in-time correct datasets using SCD2 identity modeling and explicit corporate adjustments. The pipeline ingests raw market data from Polygon (bars, splits, tickers) and builds a structured warehouse in BigQuery using dbt. 
 
-A batch-oriented financial data engineering project that ingests daily US equity bars from Polygon.io, validates vendor payloads, and maintains canonical per-symbol parquet datasets with overlap-safe incremental merging.
+The core problem addressed is that vendor data alone is not sufficient for historical correctness: ticker changes occur and break identity, and split events distort price continuity. This pipeline resolves both by maintaining a slowly changing security master (SCD2 on `composite_figi`) and applying cumulative split adjustment factors to raw prices.
 
-## Current Implemented Scope
+The output is an analytics-ready dataset at the security level (FIGI + date) that supports consistent historical analysis, including returns and volatility metrics.
 
-The current implementation focuses on the ingestion core for daily Polygon bars:
+## 2. Architecture
 
-- Daily OHLCV bar ingestion from Polygon.io
-- Schema validation before write
-- Canonical per-symbol parquet storage
-- Overlap-safe idempotent merge behavior
-- Atomic parquet writes via temp-file replacement
-- Incremental sync-state tracking
-- Basic pytest coverage for merge and validation behavior
+The system separates ingestion, storage, and transformation to enforce correctness and reproducibility. Raw data is first written to canonical parquet datasets, then loaded into an append-only BigQuery raw layer free of business logic. 
 
-## Current Guarantees
+![Architecture](./docs/architecture.png)
 
-- One canonical parquet dataset is stored per symbol
-- Canonical parquet stores `t` as a UTC timestamp normalized from Polygon epoch-millisecond input
-- Re-running overlapping backfills does not create duplicate rows
-- Incoming duplicate timestamps are deterministically deduplicated
-- Missing required fields, invalid timestamps, non-numeric required numeric fields, and non-finite numeric values fail before write
-- Empty inputs no-op cleanly
-- Core merge and validation behavior is covered by pytest tests
-
-## Architecture Overview
-
-The data pipeline is structured as a set of deterministic, testable components:
-
-- Fetch Window Resolution:
-    Determines data pull range (manual, incremental, bootstrap)
-
-- Ingestion Layer:
-    Retrieves daily OHLCV bars data (Polygon API)
-
-- Validation Layer:
-    Enforces schema correctness before any writes
-
-- Storage Layer:
-    Merges data into canonical per-symbol parquet datasets with:
-    - Idempotent merges 
-    - Duplicate timestamp resolution
-    - atomic file replacement
-
-- State Layer:
-    Maintains monotonic sync-state checkpoints per symbol
-
-- Orchestration Layers:
-    Coordinates end-to-end ingestion flow
-
-- Transformation Layer:
-    Computes derived analytics (e.g., daily returns)
-
-All components are unit tested and designed for deterministic behavior under reruns and backfills.
+Transformations are implemented in dbt across staging, intermediate, and mart layers. The `composite_figi` is used instead of `ticker` to maintain identity across time, and an SCD2 snapshot tracks changes in ticker metadata. Split adjustments are computed explicitily in an intermediate layer and applied downstream to produce point-in -time correct prices. This layered design ensure idempotent ingestion, deterministic transformations, and reproducibile analytical outputs. 
 
 
-### Warehouse Layer
+## 3. Key Design Decisions
+* **Unadjusted prices + explicit adjustment layer**
+  Raw OHLCV data is stored unmodified, and split adjustments are applied downstream using cumulative factors. This avoids reliance on vendor-adjusted data, which is often opaque and inconsistent across providers.
 
-- raw source table in BigQuery: daily_bars
+* **SCD2 security master (composite FIGI)**
+  Tickers are not stable identifiers (e.g. FB → META). A slowly changing dimension keyed on `composite_figi` preserves security identity over time and enables correct point-in-time joins.
 
-- dbt staging model: stg_daily_bars
+* **Idempotent ingestion**
+  Ingestion is designed to support safe reruns and overlapping backfills via dedup on `(ticker, date)`. This ensures that pipeline is repeatable and does not introduce data drift.
 
-- fact model: fact_daily_prices
+* **Intermediate layer separation**
+  Business logic such as split adjustment is isolated in intermediate layer instead of staging or fact models. This keeps transformations testable and easier to validate.
 
-- mart: mart_daily_returns
+
+## 4. Data Quality Guarantees
+
+Data quality is enforced through dbt tests at multiple layers:
+
+* **Schema tests** enforce:
+
+  * Not null constraints on key fields
+  * Uniqueness at grain level (e.g. `composite_figi + date`)
+
+* **Custom tests** validate:
+
+  * SCD2 integrity (no overlapping validity windows per FIGI)
+  * Correct grain enforcement in fact tables
+  * No duplicate records after transformations
+
+15 tests currently pass across staging, intermediate, and mart layers, ensuring that the dataset is structurally and temporally consistent.
 
 ## Quick Start
 
@@ -71,7 +53,9 @@ All components are unit tested and designed for deterministic behavior under rer
 
 ```env
 POLYGON_API_KEY=YOUR_API_KEY
-FRED_API_KEY=YOUR_FRED_API_KEY
+GOOGLE_CLOUD_PROJECT=GOOGLE_CLOUD_PROJECT_ID
+BQ_DATASET_ID=BIG_QUERY_DATASET_ID
+GOOGLE_APPLICATION_CREDENTIALS=PATH_TO_CREDENTIALS_JSON
 ```
 ### 2. Run first data pull
 ```bash
@@ -109,43 +93,57 @@ No state update needed
 ```
 
 Expected behavior:
-- No duplicate timestamps
-- Canonical dataset remains deduplicated
-- Sync state only advances forward
+* No duplicate timestamps
+* Canonical dataset remains deduplicated
+* Sync state only advances forward
 
 ### Repository Structure
-```
+```text
 src/
   financial_data_pipeline/
     cli.py
-    polygon.py
     config.py
+    load_bq.py
+    orchestrator.py
+    polygon.py
+    transforms.py
+flows/
+  pipeline_flow.py
+
+warehouse/
+  staging/
+  intermediate/
+  marts/
+  snapshots/
+  tests/
+
+data/
+  raw parquet datasets (per symbol)
+
+docs/
+  architecture diagrams
 
 tests/
-  test_validation.py
-  test_sync_state.py
+  pytest coverage for ingestion + validation
   ```
 
-## Roadmap
+## Known Gaps + Roadmap
 
-Implemented:
-- MVP0: Raw daily bars ingestion
-- Schema validation
-- Canonical parquet merge
-- Incremental sync-state foundation
-- Core pytest coverage
+* **SCD2 historical backfill gap**
+  Current snapshots are forward-looking from initial load. Full historical reconstruction of security master state is not yet implemented.
 
-Planned:
-- FRED ingestion
-- Raw → structured normalization layer
-- Corporate actions modeling
-- SCD2 security master
-- Daily as-of snapshots
-- Mart tables / downstream analytics outputs
+* **Corporate actions expansion**
+  Only split adjustments are modeled. Dividends and total return adjustments are not yet included.
+
+* **Macro data integration (FRED)**
+  Planned but not yet integrated into downstream marts.
+
+* **Incremental dbt models**
+  Current models run in full-refresh mode; incremental strategies are planned for scalability.
 
 ## Design Notes
 
-- Storage is currently one parquet file per symbol
-- Row uniqueness is enforced on timestamp within each symbol dataset
-- The current project is intentionally batch-oriented, not streaming
-- The current artifact is focused on ingestion correctness and data engineering fundamentals 
+* Storage is currently one parquet file per ticker
+* Row uniqueness is enforced on timestamp within each ticker dataset
+* The current project is intentionally batch-oriented, not streaming
+* The current artifact is focused on ingestion correctness and data engineering fundamentals 
