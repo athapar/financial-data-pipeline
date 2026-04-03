@@ -1,13 +1,16 @@
 # Financial Data Pipeline
 ![Architecture](./docs/architecture_preview.png)
-## 1. Project Summary
-This project is a batch-oriented financial data pipeline that constructs point-in-time correct datasets using SCD2 identity modeling and explicit corporate adjustments. The pipeline ingests raw market data from Polygon (bars, splits, tickers) and builds a structured warehouse in BigQuery using dbt. 
+## Project Summary
+This project is a production-oriented financial data pipeline for point-in-time correct analytics:
 
-The core problem addressed is that vendor data alone is not sufficient for historical correctness: ticker changes occur and break identity, and split events distort price continuity. This pipeline resolves both by maintaining a slowly changing security master (SCD2 on `composite_figi`) and applying cumulative split adjustment factors to raw prices.
+Key capabilities:
+* Idempotent ingestion from Polygon with safe re-runs and overlap backfills
+* SCD2 security master for stable identity across ticker changes (`composite_figi`)
+* Explicit split-adjusted pricing using cumulative adjustment factors
+* Deterministic batch pipeline (Parquet → BigQuery → dbt)
 
-The output is an analytics-ready dataset at the security level (FIGI + date) that supports consistent historical analysis, including returns and volatility metrics.
-
-## 2. Architecture
+The pipeline is designed for reproducibility, correctness, and safe historical reprocessing.
+## Architecture
 
 The system separates ingestion, storage, and transformation to enforce correctness and reproducibility. Raw data is first written to canonical parquet datasets, then loaded into an append-only BigQuery raw layer free of business logic. 
 
@@ -16,7 +19,7 @@ The system separates ingestion, storage, and transformation to enforce correctne
 Transformations are implemented in dbt across staging, intermediate, and mart layers. The `composite_figi` is used instead of `ticker` to maintain identity across time, and an SCD2 snapshot tracks changes in ticker metadata. Split adjustments are computed explicitly in an intermediate layer and applied downstream to produce point-in-time correct prices. This layered design ensures idempotent ingestion, deterministic transformations, and reproducible analytical outputs. 
 
 
-## 3. Key Design Decisions
+## Key Design Decisions
 * **Unadjusted prices + explicit adjustment layer**
   Raw OHLCV data is stored unmodified, and split adjustments are applied downstream using cumulative factors. This avoids reliance on vendor-adjusted data, which is often opaque and inconsistent across providers.
 
@@ -30,7 +33,29 @@ Transformations are implemented in dbt across staging, intermediate, and mart la
   Business logic such as split adjustment is isolated in the intermediate layer instead of staging or fact models. This keeps transformations testable and easier to validate.
 
 
-## 4. Data Quality Guarantees
+## Tradeoffs
+
+* **Batch over streaming** — simplifies correctness and reproducibility at the cost of latency. For daily OHLCV data, sub-day freshness is not required.
+* **BigQuery over OLTP stores** — optimized for analytical workloads and native dbt integration. Not suited for low-latency serving.
+* **Parquet canonical layer** — enables reproducibility and re-ingestion from source of truth, but adds storage duplication.
+* **Full-refresh dbt models** — simpler transformation logic and easier debugging, but not yet optimized for large-scale datasets.
+
+##  Data Model
+
+Core grains:
+
+| Layer | Model | Grain |
+|---|---|---|
+| Staging | `stg_daily_bars` | `(symbol, timestamp)` |
+| Intermediate | `int_split_adjustment_factors` | `(composite_figi, price_date)` |
+| Snapshot | `int_security_master_scd2` | `(composite_figi, dbt_valid_from, dbt_valid_to)` |
+| Mart | `fact_daily_prices` | `(composite_figi, price_date)` |
+| Mart | `mart_daily_returns` | `(composite_figi, price_date)` |
+
+All downstream joins use `composite_figi` for identity and SCD2 validity windows for point-in-time correctness.
+
+
+## Data Quality Guarantees
 
 Data quality is enforced through dbt tests at multiple layers:
 
@@ -103,16 +128,16 @@ tests/
   pytest coverage for ingestion + validation
   ```
 
-## Known Gaps + Roadmap
+## Current Limitations / Future Work
 
-* **SCD2 historical backfill gap**
-  * Current snapshots are forward-looking from initial load. Full historical reconstruction of security master state is not yet implemented.
+- SCD2 historical reconstruction:
+  Current implementation builds forward from initial snapshot. Full historical reconstruction is a known extension.
 
-* **Corporate actions expansion**
-  * Only split adjustments are modeled. Dividends and total return adjustments are not yet included.
+- Corporate actions:
+  Split adjustments implemented; dividends and total return modeling are planned.
 
-* **Macro data integration (FRED)**
-  * Planned but not yet integrated into downstream marts.
+- Incremental modeling:
+  Current dbt models use full refresh for simplicity. Incremental strategies will be introduced for scalability.
 
-* **Incremental dbt models**
-  * Current models run in full-refresh mode; incremental strategies are planned for scalability.
+- Macro data integration:
+  FRED integration planned for multi-factor analysis.
