@@ -8,6 +8,9 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 BARS_BASE_DIR = PROJECT_ROOT / "data" / "raw" / "polygon" / "bars"
 SPLITS_BASE_DIR = PROJECT_ROOT / "data" / "raw" / "polygon" / "splits"
 TICKER_BASE_DIR = PROJECT_ROOT / "data" / "raw" / "polygon" / "ticker"
+FINANCIALS_BASE_DIR = PROJECT_ROOT / "data" / "raw" / "polygon" / "financials"
+COMPANY_BASE_DIR = PROJECT_ROOT / "data" / "raw" / "polygon" / "company"
+DIVIDENDS_BASE_DIR = PROJECT_ROOT / "data" / "raw" / "polygon" / "dividends"
 WAREHOUSE_DIR = PROJECT_ROOT / "warehouse"
 SYNC_STATE_PATH = PROJECT_ROOT / "data" / "sync_state.json"
 

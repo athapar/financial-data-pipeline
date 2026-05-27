@@ -61,7 +61,7 @@ def test_bootstrap_window():
     )
 
     assert result.mode == "bootstrap"
-    assert result.start == today - timedelta(days=90)
+    assert result.start == date(2006, 1, 1)
     assert result.end == today
 
 

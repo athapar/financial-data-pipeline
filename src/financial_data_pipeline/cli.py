@@ -111,7 +111,7 @@ def resolve_fetch_window(
         return FetchWindow(start=start_date, end=end_date, mode="incremental")
 
     # --- Bootstrap ---
-    start_date = today - timedelta(days=90)
+    start_date = date(2006, 1, 1)
     end_date = today
 
     return FetchWindow(start=start_date, end=end_date, mode="bootstrap")

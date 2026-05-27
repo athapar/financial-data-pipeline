@@ -1,5 +1,6 @@
 from __future__ import annotations
-import json 
+import json
+import time
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
@@ -9,7 +10,7 @@ import pandas as pd
 import shutil
 import uuid
 import numpy as np
-from financial_data_pipeline.config import PROJECT_ROOT, BARS_BASE_DIR, SPLITS_BASE_DIR, TICKER_BASE_DIR
+from financial_data_pipeline.config import PROJECT_ROOT, BARS_BASE_DIR, SPLITS_BASE_DIR, TICKER_BASE_DIR, FINANCIALS_BASE_DIR, COMPANY_BASE_DIR, DIVIDENDS_BASE_DIR
 BARS_REQUIRED_COLUMNS = {"t", "o", "c", "h", "l", "v"}
 BARS_OPTIONAL_COLUMNS = {"vw", "n"}
 BARS_ALLOWED_COLUMNS = BARS_REQUIRED_COLUMNS | BARS_OPTIONAL_COLUMNS
@@ -31,7 +32,19 @@ class PolygonClient:
 
     def _session(self) -> requests.Session:
         return self.session or requests.Session()
-    
+
+    def _get_with_retry(self, url: str, params: dict, max_retries: int = 3) -> requests.Response:
+        sess = self._session()
+        for attempt in range(max_retries + 1):
+            r = sess.get(url, params=params, timeout=30)
+            if r.status_code in (429, 502, 503, 504) and attempt < max_retries:
+                wait = 2 ** attempt
+                print(f"[RETRY] {r.status_code} for {url}, attempt {attempt + 1}/{max_retries}, waiting {wait}s")
+                time.sleep(wait)
+                continue
+            return r
+        return r
+
     def get_bars_day(
             self,
             symbol: str,
@@ -51,7 +64,7 @@ class PolygonClient:
             "apiKey": self.api_key,
         }
 
-        r = self._session().get(url, params=params, timeout=30)
+        r = self._get_with_retry(url, params)
         r.raise_for_status()
         return r.json()
 
@@ -61,7 +74,7 @@ class PolygonClient:
             symbol: str,
             order: str = "asc",
 ) -> Dict[str, any]:
-        
+
         url = f"{POLYGON_REQUEST_URL}/v3/reference/splits"
         params = {
             "ticker": symbol,
@@ -69,35 +82,439 @@ class PolygonClient:
             "apiKey": self.api_key,
         }
 
-        r = self._session().get(url, params=params, timeout=30)
-        r.raise_for_status()
-        return r.json()
-    
+        all_results = []
+
+        while url:
+            r = self._get_with_retry(url, params)
+            r.raise_for_status()
+            body = r.json()
+            all_results.extend(body.get("results", []))
+            next_url = body.get("next_url")
+            if next_url:
+                url = next_url
+                params = {"apiKey": self.api_key}
+            else:
+                url = None
+
+        return {"results": all_results}
+
     def get_ticker(
         self,
         symbol: str,
         market: str = "stocks",
         locale: str = 'us',
-        _type: str= "CS",
+        _type: Optional[str] = None,
         active: bool= True,
         order: str = "asc"
 ) -> Dict[str, any]:
-        
+
         url = f"{POLYGON_REQUEST_URL}/v3/reference/tickers"
         params = {
             "ticker": symbol,
-            # "adjustment_type.any_of": "forward_split,reverse_split",
             "order": order,
             "apiKey": self.api_key,
             "market": market,
             "locale": locale,
-            "type": _type,
             "active": active
         }
+        if _type is not None:
+            params["type"] = _type
 
-        r = self._session().get(url, params=params, timeout=30)
+        all_results = []
+
+        while url:
+            r = self._get_with_retry(url, params)
+            r.raise_for_status()
+            body = r.json()
+            all_results.extend(body.get("results", []))
+            next_url = body.get("next_url")
+            if next_url:
+                url = next_url
+                params = {"apiKey": self.api_key}
+            else:
+                url = None
+
+        return {"results": all_results}
+
+    def get_financials(
+            self,
+            symbol: str,
+            timeframe: str = "quarterly",
+            limit: int = 50,
+    ) -> list[Dict[str, Any]]:
+        url = f"{POLYGON_REQUEST_URL}/vX/reference/financials"
+        params = {
+            "ticker": symbol,
+            "timeframe": timeframe,
+            "order": "desc",
+            "limit": limit,
+            "apiKey": self.api_key,
+        }
+
+        all_results = []
+
+        while url:
+            r = self._get_with_retry(url, params)
+            if r.status_code == 404:
+                print(f"[WARNING] Financials not found for {symbol}, skipping")
+                return []
+            r.raise_for_status()
+            body = r.json()
+            all_results.extend(body.get("results", []))
+            next_url = body.get("next_url")
+            if next_url:
+                url = next_url
+                params = {"apiKey": self.api_key}
+            else:
+                url = None
+
+        return all_results
+
+    def get_ticker_details(
+            self,
+            symbol: str,
+    ) -> Dict[str, Any]:
+        url = f"{POLYGON_REQUEST_URL}/v3/reference/tickers/{symbol}"
+        params = {"apiKey": self.api_key}
+
+        r = self._get_with_retry(url, params)
+        if r.status_code == 404:
+            print(f"[WARNING] Ticker details not found for {symbol}, skipping")
+            return {}
         r.raise_for_status()
-        return r.json()
+        body = r.json()
+        return body.get("results", {})
+
+    def get_dividends(
+            self,
+            symbol: str,
+            limit: int = 1000,
+    ) -> list[Dict[str, Any]]:
+        url = f"{POLYGON_REQUEST_URL}/v3/reference/dividends"
+        params = {
+            "ticker": symbol,
+            "order": "desc",
+            "limit": limit,
+            "apiKey": self.api_key,
+        }
+
+        all_results = []
+
+        while url:
+            r = self._get_with_retry(url, params)
+            if r.status_code == 404:
+                print(f"[WARNING] Dividends not found for {symbol}, skipping")
+                return []
+            r.raise_for_status()
+            body = r.json()
+            all_results.extend(body.get("results", []))
+            next_url = body.get("next_url")
+            if next_url:
+                url = next_url
+                params = {"apiKey": self.api_key}
+            else:
+                url = None
+
+        return all_results
+
+FINANCIALS_FIELDS = {
+    "income_statement": [
+        "revenues",
+        "cost_of_revenue",
+        "gross_profit",
+        "operating_income_loss",
+        "net_income_loss",
+        "basic_earnings_per_share",
+        "diluted_earnings_per_share",
+    ],
+    "balance_sheet": [
+        "assets",
+        "current_assets",
+        "noncurrent_assets",
+        "liabilities",
+        "current_liabilities",
+        "equity",
+    ],
+    "cash_flow_statement": [
+        "net_cash_flow_from_operating_activities",
+        "net_cash_flow_from_investing_activities",
+        "net_cash_flow_from_financing_activities",
+    ],
+}
+
+FINANCIALS_REQUIRED_COLUMNS = {
+    "ticker", "fiscal_period", "fiscal_year", "start_date", "end_date", "filing_date",
+}
+
+COMPANY_REQUIRED_COLUMNS = {"ticker", "name", "market_cap"}
+COMPANY_OPTIONAL_COLUMNS = {
+    "sic_code", "sic_description", "total_employees",
+    "list_date", "weighted_shares_outstanding", "description",
+    "composite_figi",
+}
+COMPANY_ALLOWED_COLUMNS = COMPANY_REQUIRED_COLUMNS | COMPANY_OPTIONAL_COLUMNS
+
+
+def flatten_financials(results: list[dict], symbol: str) -> pd.DataFrame | None:
+    rows = []
+    for filing in results:
+        row = {
+            "ticker": symbol,
+            "fiscal_period": filing.get("fiscal_period"),
+            "fiscal_year": filing.get("fiscal_year"),
+            "start_date": filing.get("start_date"),
+            "end_date": filing.get("end_date"),
+            "filing_date": filing.get("filing_date"),
+            "source_filing_url": filing.get("source_filing_url"),
+        }
+
+        financials = filing.get("financials", {})
+        for statement_name, field_keys in FINANCIALS_FIELDS.items():
+            statement = financials.get(statement_name, {})
+            for key in field_keys:
+                item = statement.get(key, {})
+                row[key] = item.get("value") if isinstance(item, dict) else None
+
+        rows.append(row)
+
+    if not rows:
+        return None
+
+    return pd.DataFrame(rows)
+
+
+def flatten_company_overview(details: dict, symbol: str) -> pd.DataFrame | None:
+    if not details:
+        return None
+
+    row = {
+        "ticker": symbol,
+        "name": details.get("name"),
+        "composite_figi": details.get("composite_figi"),
+        "sic_code": details.get("sic_code"),
+        "sic_description": details.get("sic_description"),
+        "market_cap": details.get("market_cap"),
+        "weighted_shares_outstanding": details.get("weighted_shares_outstanding"),
+        "total_employees": details.get("total_employees"),
+        "list_date": details.get("list_date"),
+        "description": details.get("description"),
+    }
+
+    return pd.DataFrame([row])
+
+
+def validate_financials_schema(df: pd.DataFrame) -> None:
+    incoming_cols = set(df.columns)
+
+    missing = FINANCIALS_REQUIRED_COLUMNS - incoming_cols
+    if missing:
+        raise ValueError(f"Schema violation: missing required columns in financials data: {missing}")
+
+    if df["filing_date"].isna().all():
+        raise ValueError("Schema violation: all filing_date values are null")
+
+    for col in ["fiscal_period", "fiscal_year"]:
+        if df[col].isna().any():
+            raise ValueError(f"Schema violation: null values in required column {col}")
+
+
+def validate_company_schema(df: pd.DataFrame) -> None:
+    incoming_cols = set(df.columns)
+
+    missing = COMPANY_REQUIRED_COLUMNS - incoming_cols
+    if missing:
+        raise ValueError(f"Schema violation: missing required columns in company data: {missing}")
+
+    if df["ticker"].isna().any():
+        raise ValueError("Schema violation: null ticker in company data")
+
+    if df["market_cap"].isna().any():
+        print("[WARNING] null market_cap in company data")
+
+
+def save_financials_parquet(
+    rows_df_in: pd.DataFrame,
+    symbol: str,
+    canonical_base_dir: Path = FINANCIALS_BASE_DIR,
+) -> pd.DataFrame | None:
+    if rows_df_in is None or rows_df_in.empty:
+        print("No financials data to save. Quitting...")
+        return None
+
+    validate_financials_schema(rows_df_in)
+
+    rows_df = rows_df_in.copy()
+    incoming_count = len(rows_df)
+
+    for col in ["start_date", "end_date", "filing_date"]:
+        rows_df[col] = pd.to_datetime(rows_df[col]).dt.normalize()
+
+    dup_count = rows_df.duplicated(subset=["ticker", "fiscal_period", "fiscal_year"]).sum()
+    if dup_count:
+        print(f"WARNING: {dup_count} duplicate filings in incoming payload. Deduplicating.")
+        rows_df = rows_df.drop_duplicates(subset=["ticker", "fiscal_period", "fiscal_year"], keep="first")
+
+    canonical_path = canonical_base_dir / symbol / "financials.parquet"
+    canonical_path.parent.mkdir(parents=True, exist_ok=True)
+
+    existing_count = 0
+    if canonical_path.exists():
+        prev_data = pd.read_parquet(canonical_path)
+        existing_count = len(prev_data)
+        df = pd.concat([prev_data, rows_df], ignore_index=True)
+    else:
+        df = rows_df
+
+    df = df.drop_duplicates(subset=["ticker", "fiscal_period", "fiscal_year"], keep="last")
+    df = df.sort_values(by=["fiscal_year", "fiscal_period"]).reset_index(drop=True)
+
+    tmp_path = canonical_path.with_suffix(f".tmp.{uuid.uuid4().hex}.parquet")
+    df.to_parquet(tmp_path, index=False)
+    tmp_path.replace(canonical_path)
+
+    final_count = len(df)
+    duplicates_removed = incoming_count + existing_count - final_count
+
+    print(f"Wrote financials data to {canonical_path}")
+    print(json.dumps({
+        "symbol": symbol,
+        "incoming_rows": incoming_count,
+        "existing_rows": existing_count,
+        "final_rows": final_count,
+        "duplicates_removed": duplicates_removed,
+    }))
+
+    return df
+
+
+def save_company_parquet(
+    rows_df_in: pd.DataFrame,
+    symbol: str,
+    canonical_base_dir: Path = COMPANY_BASE_DIR,
+) -> pd.DataFrame | None:
+    if rows_df_in is None or rows_df_in.empty:
+        print("No company data to save. Quitting...")
+        return None
+
+    validate_company_schema(rows_df_in)
+
+    df = rows_df_in.copy()
+
+    canonical_path = canonical_base_dir / symbol / "company.parquet"
+    canonical_path.parent.mkdir(parents=True, exist_ok=True)
+
+    cols = ["ticker", "name", "composite_figi", "sic_code", "sic_description",
+            "market_cap", "weighted_shares_outstanding", "total_employees",
+            "list_date", "description"]
+    cols_present = [c for c in cols if c in df.columns]
+    df = df[cols_present]
+
+    tmp_path = canonical_path.with_suffix(f".tmp.{uuid.uuid4().hex}.parquet")
+    df.to_parquet(tmp_path, index=False)
+    tmp_path.replace(canonical_path)
+
+    print(f"Wrote company data to {canonical_path}")
+    print(json.dumps({"symbol": symbol}))
+
+    return df
+
+
+DIVIDENDS_REQUIRED_COLUMNS = {"ticker", "cash_amount", "ex_dividend_date"}
+DIVIDENDS_OPTIONAL_COLUMNS = {"pay_date", "declaration_date", "record_date", "frequency", "dividend_type"}
+
+
+def flatten_dividends(results: list[dict], symbol: str) -> pd.DataFrame | None:
+    if not results:
+        return None
+
+    rows = []
+    for d in results:
+        rows.append({
+            "ticker": symbol,
+            "ex_dividend_date": d.get("ex_dividend_date"),
+            "pay_date": d.get("pay_date"),
+            "declaration_date": d.get("declaration_date"),
+            "record_date": d.get("record_date"),
+            "cash_amount": d.get("cash_amount"),
+            "frequency": d.get("frequency"),
+            "dividend_type": d.get("dividend_type"),
+        })
+
+    return pd.DataFrame(rows)
+
+
+def validate_dividends_schema(df: pd.DataFrame) -> None:
+    incoming_cols = set(df.columns)
+
+    missing = DIVIDENDS_REQUIRED_COLUMNS - incoming_cols
+    if missing:
+        raise ValueError(f"Schema violation: missing required columns in dividends data: {missing}")
+
+    if df["ex_dividend_date"].isna().any():
+        raise ValueError("Schema violation: null ex_dividend_date values in dividends data")
+
+    if df["cash_amount"].isna().any():
+        print("[WARNING] null cash_amount in dividends data")
+
+
+def save_dividends_parquet(
+    rows_df_in: pd.DataFrame,
+    symbol: str,
+    canonical_base_dir: Path = DIVIDENDS_BASE_DIR,
+) -> pd.DataFrame | None:
+    if rows_df_in is None or rows_df_in.empty:
+        print("No dividends data to save. Quitting...")
+        return None
+
+    validate_dividends_schema(rows_df_in)
+
+    rows_df = rows_df_in.copy()
+    incoming_count = len(rows_df)
+
+    rows_df["ex_dividend_date"] = pd.to_datetime(rows_df["ex_dividend_date"]).dt.normalize()
+    for col in ["pay_date", "declaration_date", "record_date"]:
+        if col in rows_df.columns:
+            rows_df[col] = pd.to_datetime(rows_df[col], errors="coerce").dt.normalize()
+
+    rows_df["cash_amount"] = rows_df["cash_amount"].astype("float64")
+
+    dup_count = rows_df.duplicated(subset=["ticker", "ex_dividend_date", "cash_amount"]).sum()
+    if dup_count:
+        print(f"WARNING: {dup_count} duplicate dividends in incoming payload. Deduplicating.")
+        rows_df = rows_df.drop_duplicates(subset=["ticker", "ex_dividend_date", "cash_amount"], keep="first")
+
+    canonical_path = canonical_base_dir / symbol / "dividends.parquet"
+    canonical_path.parent.mkdir(parents=True, exist_ok=True)
+
+    existing_count = 0
+    if canonical_path.exists():
+        prev_data = pd.read_parquet(canonical_path)
+        existing_count = len(prev_data)
+        df = pd.concat([prev_data, rows_df], ignore_index=True)
+    else:
+        df = rows_df
+
+    df = df.drop_duplicates(subset=["ticker", "ex_dividend_date", "cash_amount"], keep="last")
+    df = df.sort_values(by=["ex_dividend_date"]).reset_index(drop=True)
+
+    tmp_path = canonical_path.with_suffix(f".tmp.{uuid.uuid4().hex}.parquet")
+    df.to_parquet(tmp_path, index=False)
+    tmp_path.replace(canonical_path)
+
+    final_count = len(df)
+    duplicates_removed = incoming_count + existing_count - final_count
+
+    print(f"Wrote dividends data to {canonical_path}")
+    print(json.dumps({
+        "symbol": symbol,
+        "incoming_rows": incoming_count,
+        "existing_rows": existing_count,
+        "final_rows": final_count,
+        "duplicates_removed": duplicates_removed,
+    }))
+
+    return df
+
 
 def validate_bars_schema(df: pd.DataFrame) -> None:
     """
@@ -335,6 +752,8 @@ def save_splits_parquet(
 
     canonical_cols = ['ticker', 'execution_date', 'id', 'split_from', 'split_to']
     df = df[canonical_cols]
+    df["split_from"] = df["split_from"].astype("float64")
+    df["split_to"] = df["split_to"].astype("float64")
 
     tmp_path = canonical_path.with_suffix(f".tmp.{uuid.uuid4().hex}.parquet")
     df.to_parquet(tmp_path, index=False)
