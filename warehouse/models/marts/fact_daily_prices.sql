@@ -21,8 +21,8 @@ with
             m.composite_figi, 
             b.*
 
-        FROM bars b INNER JOIN {{ ref('int_security_master_scd2') }} m
-        ON b.symbol = m.ticker AND m.dbt_valid_to is null
+        FROM bars b INNER JOIN {{ ref('int_security_master_historical') }} m
+        ON b.symbol = m.ticker AND m.valid_to is null
     ),
     
     -- Adjust historic prices using adjustment factors calculated from splits data

@@ -3,9 +3,9 @@ with financials_with_figi as (
         m.composite_figi,
         f.*
     from {{ ref('stg_quarterly_financials') }} f
-    inner join {{ ref('int_security_master_scd2') }} m
+    inner join {{ ref('int_security_master_historical') }} m
         on f.ticker = m.ticker
-        and m.dbt_valid_to is null
+        and m.valid_to is null
 ),
 
 ranked as (

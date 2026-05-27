@@ -6,9 +6,9 @@ with dividends_with_figi as (
         d.cash_amount,
         d.frequency
     from {{ ref('stg_dividends') }} d
-    inner join {{ ref('int_security_master_scd2') }} m
+    inner join {{ ref('int_security_master_historical') }} m
         on d.ticker = m.ticker
-        and m.dbt_valid_to is null
+        and m.valid_to is null
     where d.dividend_type = 'CD'
 ),
 
