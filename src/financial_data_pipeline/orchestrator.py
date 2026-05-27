@@ -1,4 +1,9 @@
-from financial_data_pipeline.polygon import PolygonClient, merge_df_with_parquet, save_splits_parquet, save_ticker_parquet
+from financial_data_pipeline.polygon import (
+    PolygonClient, merge_df_with_parquet, save_splits_parquet, save_ticker_parquet,
+    flatten_financials, save_financials_parquet,
+    flatten_company_overview, save_company_parquet,
+    flatten_dividends, save_dividends_parquet,
+)
 from financial_data_pipeline.cli import resolve_fetch_window, update_sync_state
 from pathlib import Path
 from typing import Optional
@@ -143,4 +148,108 @@ def run_ticker_ingestion(
     return {
         "symbol": symbol,
         "status": "success",
+    }
+
+
+def run_financials_ingestion(
+        symbol: str,
+        client: PolygonClient,
+        canonical_base_dir: Path,
+) -> dict:
+    results = client.get_financials(symbol)
+
+    if not results:
+        return {
+            "symbol": symbol,
+            "status": "no_op",
+            "reason": "empty_payload",
+        }
+
+    df = flatten_financials(results, symbol)
+    if df is None:
+        return {
+            "symbol": symbol,
+            "status": "no_op",
+            "reason": "flatten_returned_none",
+        }
+
+    result_df = save_financials_parquet(
+        df,
+        symbol=symbol,
+        canonical_base_dir=canonical_base_dir,
+    )
+
+    return {
+        "symbol": symbol,
+        "status": "success",
+        "rows": len(result_df) if result_df is not None else 0,
+    }
+
+
+def run_company_overview_ingestion(
+        symbol: str,
+        client: PolygonClient,
+        canonical_base_dir: Path,
+) -> dict:
+    details = client.get_ticker_details(symbol)
+
+    if not details:
+        return {
+            "symbol": symbol,
+            "status": "no_op",
+            "reason": "empty_payload",
+        }
+
+    df = flatten_company_overview(details, symbol)
+    if df is None:
+        return {
+            "symbol": symbol,
+            "status": "no_op",
+            "reason": "flatten_returned_none",
+        }
+
+    result_df = save_company_parquet(
+        df,
+        symbol=symbol,
+        canonical_base_dir=canonical_base_dir,
+    )
+
+    return {
+        "symbol": symbol,
+        "status": "success",
+    }
+
+
+def run_dividends_ingestion(
+        symbol: str,
+        client: PolygonClient,
+        canonical_base_dir: Path,
+) -> dict:
+    results = client.get_dividends(symbol)
+
+    if not results:
+        return {
+            "symbol": symbol,
+            "status": "no_op",
+            "reason": "empty_payload",
+        }
+
+    df = flatten_dividends(results, symbol)
+    if df is None:
+        return {
+            "symbol": symbol,
+            "status": "no_op",
+            "reason": "flatten_returned_none",
+        }
+
+    result_df = save_dividends_parquet(
+        df,
+        symbol=symbol,
+        canonical_base_dir=canonical_base_dir,
+    )
+
+    return {
+        "symbol": symbol,
+        "status": "success",
+        "rows": len(result_df) if result_df is not None else 0,
     }
