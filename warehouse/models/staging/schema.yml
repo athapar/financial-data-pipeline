@@ -8,6 +8,9 @@ sources:
       - name: daily_bars
       - name: splits
       - name: tickers
+      - name: quarterly_financials
+      - name: company_overview
+      - name: dividends
 
 models:
   - name: stg_daily_bars
@@ -29,5 +32,57 @@ models:
           - not_null
       - name: v
         description: Trading volume
+        tests:
+          - not_null
+
+  - name: stg_quarterly_financials
+    description: >
+      Quarterly financial statements sourced from raw.quarterly_financials (Polygon.io).
+      One row per (ticker, fiscal_period, fiscal_year). Includes income statement,
+      balance sheet, and cash flow fields flattened from nested API response.
+    columns:
+      - name: ticker
+        description: Stock ticker symbol
+        tests:
+          - not_null
+      - name: fiscal_period
+        description: Fiscal quarter (Q1, Q2, Q3, Q4)
+        tests:
+          - not_null
+      - name: fiscal_year
+        description: Fiscal year
+        tests:
+          - not_null
+      - name: filing_date
+        description: SEC filing date — use for point-in-time correctness
+        tests:
+          - not_null
+
+  - name: stg_company_overview
+    description: >
+      Company reference data sourced from raw.company_overview (Polygon.io).
+      One row per ticker. Includes sector classification, market cap, and employee count.
+    columns:
+      - name: ticker
+        description: Stock ticker symbol
+        tests:
+          - not_null
+
+  - name: stg_dividends
+    description: >
+      Dividend payment history sourced from raw.dividends (Polygon.io).
+      One row per (ticker, ex_dividend_date, cash_amount). Includes payment
+      dates, frequency, and dividend type.
+    columns:
+      - name: ticker
+        description: Stock ticker symbol
+        tests:
+          - not_null
+      - name: ex_dividend_date
+        description: Ex-dividend date
+        tests:
+          - not_null
+      - name: cash_amount
+        description: Dividend payment per share in USD
         tests:
           - not_null

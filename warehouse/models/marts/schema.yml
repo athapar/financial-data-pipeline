@@ -56,3 +56,68 @@ models:
         description: Rolling 20 day standard deviation of daily returns
       - name: volatility_60d
         description: Rolling 60 day standard deviation of daily returns
+
+  - name: mart_fundamentals_valuation
+    description: >
+      Grain: (composite_figi). Cross-domain valuation model joining TTM
+      fundamental aggregations with latest market price and company overview.
+      Produces P/E, P/B, P/S, EV/EBIT, price-to-FCF ratios alongside
+      profitability metrics (margins, ROE, ROA) and financial health
+      indicators (current ratio, debt-to-equity). Only includes securities
+      with 4 complete quarters of financial data. filing_date preserves
+      point-in-time correctness.
+    columns:
+      - name: composite_figi
+        description: Composite Financial Instrument Global Identifier (FIGI)
+        tests:
+          - not_null
+          - unique
+      - name: ticker
+        tests:
+          - not_null
+      - name: pe_ratio
+        description: Price-to-earnings ratio (trailing twelve months)
+      - name: pb_ratio
+        description: Price-to-book ratio
+      - name: ev_ebit
+        description: Enterprise value to EBIT
+
+  - name: mart_fundamentals_factor_scores
+    description: >
+      Grain: (composite_figi). Quantitative factor classification scoring
+      each security on value, growth, and quality dimensions using
+      cross-sectional percentile ranks. Value score uses P/E, P/B, P/S.
+      Growth score uses operating margin and ROE. Quality score uses ROE,
+      leverage, and FCF conversion. Each security receives a dominant
+      factor classification (VALUE, GROWTH, QUALITY, or BLEND).
+    columns:
+      - name: composite_figi
+        description: Composite Financial Instrument Global Identifier (FIGI)
+        tests:
+          - not_null
+          - unique
+      - name: ticker
+        tests:
+          - not_null
+      - name: factor_classification
+        description: Dominant factor label (VALUE, GROWTH, QUALITY, BLEND)
+        tests:
+          - not_null
+
+  - name: mart_dividend_yield
+    description: >
+      Grain: (composite_figi, ex_dividend_date). Trailing twelve month
+      dividend yield computed at each ex-dividend date by summing all
+      cash dividends in the prior 365 days and dividing by the split-adjusted
+      close price on the ex-date. Only includes cash dividends (type CD).
+    columns:
+      - name: composite_figi
+        description: Composite Financial Instrument Global Identifier (FIGI)
+        tests:
+          - not_null
+      - name: ex_dividend_date
+        description: Ex-dividend date
+        tests:
+          - not_null
+      - name: ttm_dividend_yield
+        description: Trailing 12-month dividend yield (annualized dividends / price)

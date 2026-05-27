@@ -22,3 +22,22 @@ models:
         tests:
           - not_null
 
+  - name: int_fundamentals_ttm
+    description: >
+      Trailing twelve month (TTM) fundamental aggregations per security.
+      Flow metrics (revenue, income, cash flow) are summed over the 4 most
+      recent quarters. Balance sheet items are point-in-time from the latest
+      quarter. Derived margins, ROE, and financial health ratios included.
+      Grain: (composite_figi). Only securities with 4 quarters of data are
+      considered complete.
+    columns:
+      - name: composite_figi
+        description: Composite Financial Instrument Global Identifier (FIGI)
+        tests:
+          - not_null
+          - unique
+      - name: quarters_included
+        description: Number of quarters summed (should be 4 for valid TTM)
+        tests:
+          - not_null
+
