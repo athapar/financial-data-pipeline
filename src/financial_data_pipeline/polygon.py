@@ -185,6 +185,21 @@ class PolygonClient:
         body = r.json()
         return body.get("results", {})
 
+    def get_ticker_events(
+            self,
+            symbol: str,
+    ) -> Dict[str, Any]:
+        url = f"{POLYGON_REQUEST_URL}/vX/reference/tickers/{symbol}/events"
+        params = {"apiKey": self.api_key}
+
+        r = self._get_with_retry(url, params)
+        if r.status_code == 404:
+            print(f"[WARNING] Ticker events not found for {symbol}, skipping")
+            return {}
+        r.raise_for_status()
+        body = r.json()
+        return body.get("results", {})
+
     def get_dividends(
             self,
             symbol: str,

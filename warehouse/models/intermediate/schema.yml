@@ -41,3 +41,26 @@ models:
         tests:
           - not_null
 
+  - name: int_security_master_historical
+    description: >
+      Full SCD2 security master with retrospective history. Unions a
+      historical ticker seed (sourced from Polygon ticker events API)
+      with the forward-looking dbt snapshot. The seed provides
+      pre-snapshot history (e.g. FB → META in 2022, MWD → MS in 2006),
+      while the snapshot captures ongoing changes. Each row represents
+      a validity window for a (composite_figi, ticker) pair.
+    columns:
+      - name: composite_figi
+        description: Composite Financial Instrument Global Identifier (FIGI)
+        tests:
+          - not_null
+      - name: ticker
+        tests:
+          - not_null
+      - name: valid_from
+        description: Start of validity window for this ticker-to-FIGI mapping
+        tests:
+          - not_null
+      - name: source
+        description: Origin of the row — 'seed' for historical, 'snapshot' for forward-looking
+
