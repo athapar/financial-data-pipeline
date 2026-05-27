@@ -4,7 +4,7 @@ with seed as (
         ticker,
         name,
         cast(valid_from as date) as valid_from,
-        cast(nullif(valid_to, '') as date) as valid_to
+        safe_cast(valid_to as date) as valid_to
     from {{ ref('ticker_history_seed') }}
 ),
 
