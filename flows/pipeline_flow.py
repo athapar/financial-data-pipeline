@@ -13,8 +13,23 @@ from financial_data_pipeline.orchestrator import (
 from financial_data_pipeline.cli import load_sync_path
 from prefect import flow, task
 from datetime import datetime, timedelta
+from logging.handlers import RotatingFileHandler
+import logging
 import subprocess
 from pathlib import Path
+
+log_path = PROJECT_ROOT / "logs" / "pipeline.log"
+log_path.parent.mkdir(parents=True, exist_ok=True)
+
+file_handler = RotatingFileHandler(
+    log_path, maxBytes=5 * 1024 * 1024, backupCount=0,
+)
+file_handler.setFormatter(logging.Formatter("%(asctime)s | %(levelname)-5s | %(name)s | %(message)s"))
+file_handler.setLevel(logging.INFO)
+
+for logger_name in ["prefect", "prefect.flow_runs", "prefect.task_runs", ""]:
+    lgr = logging.getLogger(logger_name)
+    lgr.addHandler(file_handler)
 
 start = None
 end = None
