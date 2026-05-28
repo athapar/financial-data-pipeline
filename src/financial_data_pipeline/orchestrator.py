@@ -5,6 +5,7 @@ from financial_data_pipeline.polygon import (
     flatten_dividends, save_dividends_parquet,
 )
 from financial_data_pipeline.cli import resolve_fetch_window, update_sync_state
+from financial_data_pipeline.config import SYNC_STATE_PATH
 from pathlib import Path
 from typing import Optional
 import pandas as pd
@@ -62,7 +63,7 @@ def run_symbol_ingestion(
     new_date = max_t.date().isoformat()
 
     state_updated = update_sync_state(
-        sync_file_path=canonical_base_dir.parent / "sync_state.json",
+        sync_file_path=SYNC_STATE_PATH,
         symbol=symbol,
         new_date=new_date,
     )
