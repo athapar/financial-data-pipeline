@@ -89,7 +89,7 @@ Data quality is enforced through dbt tests at multiple layers:
   * TTM completeness (4 quarters required for valid annualized metrics)
   * No duplicate records after transformations
 
-32 tests currently pass across staging, intermediate, and mart layers, ensuring that the dataset is structurally and temporally consistent.
+43 tests currently pass across staging, intermediate, and mart layers (38 schema tests + 5 custom singular tests), ensuring that the dataset is structurally and temporally consistent.
 
 ## Quick Start
 
