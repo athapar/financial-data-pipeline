@@ -15,8 +15,16 @@ from prefect import flow, task
 from datetime import datetime, timedelta
 from logging.handlers import RotatingFileHandler
 import logging
+import shutil
 import subprocess
+import sys
 from pathlib import Path
+
+DBT_EXECUTABLE = (
+    str(Path(sys.executable).parent / ("dbt.exe" if sys.platform == "win32" else "dbt"))
+    if (Path(sys.executable).parent / ("dbt.exe" if sys.platform == "win32" else "dbt")).exists()
+    else shutil.which("dbt") or "dbt"
+)
 
 log_path = PROJECT_ROOT / "logs" / "pipeline.log"
 log_path.parent.mkdir(parents=True, exist_ok=True)
@@ -165,9 +173,9 @@ def load_all_to_bq(symbols: list[str]) -> None:
 
 @task(log_prints=True)
 def run_dbt():
-    subprocess.run(["dbt", "snapshot"], cwd=WAREHOUSE_DIR, check=True)
-    subprocess.run(["dbt", "run"], cwd=WAREHOUSE_DIR, check=True)
-    subprocess.run(["dbt", "test"], cwd=WAREHOUSE_DIR, check=True)
+    subprocess.run([DBT_EXECUTABLE, "snapshot"], cwd=WAREHOUSE_DIR, check=True)
+    subprocess.run([DBT_EXECUTABLE, "run"], cwd=WAREHOUSE_DIR, check=True)
+    subprocess.run([DBT_EXECUTABLE, "test"], cwd=WAREHOUSE_DIR, check=True)
 
 
 # ── Flow ─────────────────────────────────────────────────────────────
